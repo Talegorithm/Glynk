@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+psycopg2-binary
+pgvector
+openai
+httpx
+ebooklib
+beautifulsoup4
+lxml
+jionlp
+feedparser
+apscheduler
+python-multipart
+python-dotenv
+trafilatura
