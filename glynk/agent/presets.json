@@ -1,0 +1,9 @@
+{
+  "annotator": {
+    "system_prompt_file": "annotator.prompt",
+    "max_iterations": 500,
+    "temperature": 0.3,
+    "skills": ["planning"],
+    "description": "官方标注 Agent - 通读内容，生成 AI 大纲和 hooks"
+  }
+}

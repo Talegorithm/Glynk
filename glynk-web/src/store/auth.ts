@@ -4,9 +4,7 @@ import { persist } from 'zustand/middleware';
 interface AuthState {
   uid: string | null;
   token: string | null;
-  name: string | null;
-  email: string | null;
-  setAuth: (data: { uid: string; token: string; name?: string; email?: string }) => void;
+  setAuth: (data: { uid: string; token: string }) => void;
   logout: () => void;
   isAuthenticated: () => boolean;
 }
@@ -16,17 +14,15 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       uid: null,
       token: null,
-      name: null,
-      email: null,
 
-      setAuth: ({ uid, token, name, email }) => {
+      setAuth: ({ uid, token }) => {
         localStorage.setItem('glynk_token', token);
-        set({ uid, token, name: name ?? null, email: email ?? null });
+        set({ uid, token });
       },
 
       logout: () => {
         localStorage.removeItem('glynk_token');
-        set({ uid: null, token: null, name: null, email: null });
+        set({ uid: null, token: null });
       },
 
       isAuthenticated: () => get().token !== null,

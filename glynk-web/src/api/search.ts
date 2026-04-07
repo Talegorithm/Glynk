@@ -8,15 +8,23 @@ export interface SemanticSearchParams {
 }
 
 export interface SemanticSearchResult {
-  id: string;
+  annotation_id: string;
+  content_id: string;
+  content_title: string;
+  content_author: string;
   type: string;
   text: string;
+  tags: string[];
+  anchor: { type: string; spans: string[] };
   score: number;
-  content_id?: string;
-  content_title?: string;
+  crowd_count: number;
+  browse_url: string;
 }
 
-export async function semanticSearch(params: SemanticSearchParams): Promise<SemanticSearchResult[]> {
-  const res = await client.post<SemanticSearchResult[]>('/search/semantic', params);
+export async function semanticSearch(params: SemanticSearchParams): Promise<{
+  query_id: string;
+  results: SemanticSearchResult[];
+}> {
+  const res = await client.post<{ query_id: string; results: SemanticSearchResult[] }>('/query', params);
   return res.data;
 }

@@ -13,6 +13,8 @@ venv/
 # Data
 Glynk-data/
 /tmp/
+.cache
+glynk/agent/.traces
 
 # IDE
 .idea/

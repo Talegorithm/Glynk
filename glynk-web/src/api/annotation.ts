@@ -1,15 +1,29 @@
 import client from './client';
 import type { Annotation, QueryResponse } from '../types/annotation';
 
-export async function createAnnotation(data: Omit<Annotation, 'annotation_id' | 'created_at' | 'updated_at'>): Promise<Annotation> {
-  const res = await client.post<Annotation>('/annotations', data);
+export async function createAnnotation(data: {
+  content_id: string;
+  anchor: { type: string; spans: string[] };
+  type: string;
+  text: string;
+  tags?: string[];
+  contextuality?: string;
+  visibility?: string;
+}): Promise<Annotation> {
+  const res = await client.post<Annotation>('/annotate', data);
   return res.data;
 }
 
 export async function createBatchAnnotations(
-  annotations: Omit<Annotation, 'annotation_id' | 'created_at' | 'updated_at'>[],
-): Promise<Annotation[]> {
-  const res = await client.post<Annotation[]>('/annotations/batch', { annotations });
+  annotations: Array<{
+    content_id: string;
+    anchor: { type: string; spans: string[] };
+    type: string;
+    text: string;
+    tags?: string[];
+  }>,
+): Promise<{ created: number; ids: string[] }> {
+  const res = await client.post<{ created: number; ids: string[] }>('/annotate/batch', { annotations });
   return res.data;
 }
 
@@ -18,12 +32,12 @@ export async function getMyAnnotations(params?: {
   type?: string;
   limit?: number;
   offset?: number;
-}): Promise<QueryResponse> {
-  const res = await client.get<QueryResponse>('/annotations', { params });
+}): Promise<{ annotations: Annotation[]; total: number }> {
+  const res = await client.get<{ annotations: Annotation[]; total: number }>('/annotations', { params });
   return res.data;
 }
 
-export async function searchMyAnnotations(query: string): Promise<QueryResponse> {
-  const res = await client.get<QueryResponse>('/annotations/search', { params: { q: query } });
+export async function searchMyAnnotations(query: string): Promise<{ results: Annotation[] }> {
+  const res = await client.post<{ results: Annotation[] }>('/annotations/search', { query });
   return res.data;
 }
