@@ -26,11 +26,14 @@ export default function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route element={<PrivateRoute />}>
-            <Route path="/read/:contentId" element={<ReaderPage />} />
-            <Route path="/read/:contentId/:fileIdx" element={<ReaderPage />} />
             <Route path="/library" element={<LibraryPage />} />
             <Route path="/notes" element={<NotesPage />} />
           </Route>
+        </Route>
+
+        <Route element={<PrivateRoute />}>
+          <Route path="/read/:contentId" element={<ReaderPage />} />
+          <Route path="/read/:contentId/:fileIdx" element={<ReaderPage />} />
         </Route>
       </Routes>
     </TimeGradientBg>

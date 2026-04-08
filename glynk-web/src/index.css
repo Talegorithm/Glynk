@@ -15,12 +15,41 @@
   }
   
   .sky .glass-panel {
-    @apply bg-white/40 dark:bg-black/30 backdrop-blur-2xl shadow-2xl border-white/30 dark:border-white/10;
+    @apply bg-white/40 dark:bg-black/30 backdrop-blur-2xl shadow-[0_8px_32px_rgba(0,0,0,0.08)] border-white/40 dark:border-white/10;
+  }
+  .animate-blob-1 {
+    animation: blobOrbit1 25s infinite alternate ease-in-out;
+  }
+
+  .animate-blob-2 {
+    animation: blobOrbit2 35s infinite alternate ease-in-out;
   }
 }
 
-@keyframes skyFlow {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+@layer components {
+  .glynk-input {
+    @apply w-full px-4 py-3 bg-white/50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300 shadow-inner placeholder:text-gray-400 dark:placeholder:text-gray-500;
+  }
+  
+  .sky .glynk-input {
+    @apply bg-white/20 dark:bg-black/20 border-white/30 dark:border-white/10 backdrop-blur-md;
+  }
+
+  .glynk-button {
+    @apply w-full py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-xl text-sm font-medium transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg flex justify-center items-center h-[48px] cursor-pointer hover:-translate-y-0.5;
+  }
+  
+  .glynk-button-primary {
+    @apply w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-500/30 flex justify-center items-center h-[48px] cursor-pointer hover:-translate-y-0.5;
+  }
+}
+
+@keyframes blobOrbit1 {
+  0% { transform: scale(1) translate(0%, 0%); }
+  100% { transform: scale(1.1) translate(5%, 8%); }
+}
+
+@keyframes blobOrbit2 {
+  0% { transform: scale(1) translate(0%, 0%); }
+  100% { transform: scale(1.15) translate(-8%, -5%); }
 }

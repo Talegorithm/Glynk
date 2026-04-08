@@ -37,7 +37,7 @@ const TIME_GRADIENTS: Record<TimeOfDay, GradientConfig> = {
     positions: [0, 50, 100],
   },
   lateNight: {
-    colors: ['#010630', '#283D51', '#283D51'],
+    colors: ['#050814', '#0A1125', '#10162B'],
     positions: [0, 41, 100],
   },
 };
@@ -56,11 +56,17 @@ function getTimeOfDay(): TimeOfDay {
 }
 
 function generateGradientCSS(config: GradientConfig): string {
+  if (config.colors.length === 3) {
+    const [c1, c2, c3] = config.colors;
+    return `linear-gradient(160deg, ${c1} 0%, ${c2} var(--mid-stop, 50%), ${c3} 100%)`;
+  }
+  
+  // Fallback for any other lengths
   const stops = config.colors
     .map((color, index) => `${color} ${config.positions[index]}%`)
     .join(', ');
 
-  return `linear-gradient(180deg, ${stops})`;
+  return `linear-gradient(160deg, ${stops})`;
 }
 
 export function isNightTime(): boolean {
@@ -68,25 +74,39 @@ export function isNightTime(): boolean {
   return hour >= 21 || hour < 5;
 }
 
-export function useTimeGradient() {
+export function useTimeGradient(themeStr?: string) {
   const [gradient, setGradient] = useState('');
+  const [colors, setColors] = useState<string[]>([]);
   const [isNight, setIsNight] = useState(false);
 
   useEffect(() => {
     const updateGradient = () => {
-      const timeType = getTimeOfDay();
+      let timeType = getTimeOfDay();
+      let nightFlag = isNightTime();
+
+      if (themeStr === 'light') {
+        timeType = 'noon';
+        nightFlag = false;
+      } else if (themeStr === 'dark') {
+        timeType = 'lateNight';
+        nightFlag = true;
+      }
+
       const config = TIME_GRADIENTS[timeType];
       const gradientCSS = generateGradientCSS(config);
 
       setGradient(gradientCSS);
-      setIsNight(isNightTime());
+      setColors(config.colors);
+      setIsNight(nightFlag);
     };
 
     updateGradient();
     const interval = setInterval(updateGradient, 60000);
 
-    return () => clearInterval(interval);
-  }, []);
+    return () => {
+      clearInterval(interval);
+    };
+  }, [themeStr]);
 
-  return { gradient, isNight };
+  return { gradient, isNight, colors };
 }

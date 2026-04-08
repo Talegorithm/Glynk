@@ -26,12 +26,12 @@ interface Star {
 }
 
 export function TimeGradientBg({ children, className = '', showStars = true }: TimeGradientBgProps) {
-  const { gradient, isNight } = useTimeGradient();
   const theme = useThemeStore((state) => state.theme);
+  const { gradient, isNight, colors } = useTimeGradient(theme);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    if (!showStars || !isNight || theme !== 'sky') return;
+    if (!showStars || !isNight) return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -98,23 +98,33 @@ export function TimeGradientBg({ children, className = '', showStars = true }: T
         cancelAnimationFrame(animationId);
       }
     };
-  }, [showStars, isNight, theme]);
+  }, [showStars, isNight]);
 
   return (
-    <div className={`relative min-h-screen ${className}`}>
-      {theme === 'sky' && (
-        <>
-          <div
-            className="fixed inset-0 transition-all duration-[2s] ease-in-out -z-20"
-            style={{ background: gradient }}
-          />
-          {showStars && isNight && (
-            <canvas
-              ref={canvasRef}
-              className="fixed inset-0 pointer-events-none -z-10"
+    <div className={`relative min-h-screen overflow-hidden ${className}`}>
+      <div
+        className="fixed inset-0 transition-opacity duration-[2s] ease-in-out -z-20"
+        style={{ backgroundImage: gradient }}
+      >
+        {/* Massive roaming fluid color blobs */}
+        {colors && colors.length === 3 && (
+          <div className="absolute inset-0 z-0 opacity-100 mix-blend-normal">
+            <div 
+              className="absolute top-[-30%] left-[-20%] w-[140vw] h-[90vh] blur-[150px] animate-blob-1 opacity-60 rounded-full"
+              style={{ backgroundColor: colors[0] }}
             />
-          )}
-        </>
+            <div 
+              className="absolute bottom-[-30%] right-[-20%] w-[140vw] h-[90vh] blur-[150px] animate-blob-2 opacity-60 rounded-full"
+              style={{ backgroundColor: colors[2] }}
+            />
+          </div>
+        )}
+      </div>
+      {showStars && isNight && (
+        <canvas
+          ref={canvasRef}
+          className="fixed inset-0 pointer-events-none -z-10 animate-in fade-in duration-1000"
+        />
       )}
       {children && (
         <div className="relative z-0 flex flex-col min-h-screen">

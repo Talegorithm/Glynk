@@ -69,8 +69,8 @@ export default function NotesPage() {
   return (
     <div className="max-w-3xl mx-auto px-6 py-10">
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-xl font-semibold text-gray-900">Notes</h1>
-        <span className="text-sm text-gray-400">{total} 条</span>
+        <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Notes</h1>
+        <span className="text-sm text-gray-400 dark:text-gray-500">{total} 条</span>
       </div>
 
       <form onSubmit={handleSearch} className="mb-6">
@@ -79,7 +79,7 @@ export default function NotesPage() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="搜索笔记..."
-          className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
+          className="glynk-input"
         />
       </form>
 
@@ -90,8 +90,8 @@ export default function NotesPage() {
             onClick={() => setFilter(t.key)}
             className={`px-3 py-1.5 text-sm rounded-lg cursor-pointer transition-colors ${
               filter === t.key
-                ? 'bg-gray-900 text-white'
-                : 'text-gray-600 hover:bg-gray-100'
+                ? 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900'
+                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
             }`}
           >
             {t.label}
@@ -99,10 +99,10 @@ export default function NotesPage() {
         ))}
       </div>
 
-      {loading && <p className="text-center text-sm text-gray-400 py-16">加载中...</p>}
+      {loading && <p className="text-center text-sm text-gray-400 dark:text-gray-500 py-16">加载中...</p>}
 
       {!loading && annotations.length === 0 && (
-        <p className="text-center text-sm text-gray-400 py-16">暂无标注</p>
+        <p className="text-center text-sm text-gray-400 dark:text-gray-500 py-16">暂无标注</p>
       )}
 
       {!loading && (
@@ -121,22 +121,22 @@ export default function NotesPage() {
               <Link
                 key={a.id}
                 to={linkTo}
-                className="block p-4 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+                className="block p-4 md:p-5 rounded-xl glass-panel hover:-translate-y-0.5 transition-transform duration-200"
               >
                 <div className="flex items-center gap-2 mb-2">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${badge.cls}`}>
                     {badge.label}
                   </span>
                   {a.tags?.length > 0 && (
-                    <span className="text-xs text-gray-400 truncate">
+                    <span className="text-xs text-gray-400 dark:text-gray-500 truncate">
                       {a.tags.join(' · ')}
                     </span>
                   )}
-                  <span className="text-xs text-gray-400 ml-auto shrink-0">
+                  <span className="text-xs text-gray-400 dark:text-gray-500 ml-auto shrink-0">
                     {formatDate(a.created_at)}
                   </span>
                 </div>
-                <p className="text-sm text-gray-700 leading-relaxed line-clamp-3">
+                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed line-clamp-3">
                   {a.text}
                 </p>
               </Link>

@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { loginByToken } from '../api/auth';
 import { useAuthStore } from '../store/auth';
-import { SkyBackground } from '../components/common/SkyBackground';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -30,12 +29,8 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
-      {/* 渐变星空背景 */}
-      <SkyBackground />
-
-      {/* 登录面板 */}
-      <div className="glass-panel w-full max-w-md mx-4 p-8 md:p-10 rounded-[24px] relative z-10 transition-transform duration-300 hover:-translate-y-1">
+    <div className="w-full h-full flex flex-col items-center justify-center p-6 flex-1 min-h-[70vh]">
+      <div className="glass-panel w-full max-w-md p-8 md:p-10 rounded-[24px] relative z-10 transition-transform duration-300 hover:-translate-y-1">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-semibold text-gray-900 dark:text-white mb-3 tracking-tight">欢迎回来</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -54,13 +49,13 @@ export default function LoginPage() {
               placeholder="glk_..."
               rows={3}
               required
-              className="w-full px-4 py-3 bg-white/50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl text-sm font-mono text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 resize-none transition-all duration-300 backdrop-blur-sm shadow-inner"
+              className="glynk-input font-mono resize-none"
             />
           </div>
           <button
             type="submit"
             disabled={loading || !tokenInput.trim()}
-            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-lg shadow-blue-500/30 flex justify-center items-center h-[48px]"
+            className="glynk-button-primary"
           >
             {loading ? (
               <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

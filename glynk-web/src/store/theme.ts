@@ -47,16 +47,13 @@ export function applyTheme(theme: Theme) {
   const root = window.document.documentElement;
   
   root.classList.remove('light', 'dark', 'sky');
+  root.classList.add('sky'); // Universal glassmorphism foundation
+  root.style.backgroundColor = 'transparent';
 
-  if (theme === 'sky') {
-    root.classList.add('sky');
-    if (isNightTime()) {
-      root.classList.add('dark');
-    }
+  if (theme === 'dark' || (theme === 'sky' && isNightTime())) {
+    root.classList.add('dark');
   } else {
-    root.classList.add(theme);
-    // Explicit background color to html/body when not in sky mode
-    root.style.backgroundColor = theme === 'dark' ? '#0f1118' : '#ffffff';
+    root.classList.add('light');
   }
 }
 

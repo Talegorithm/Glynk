@@ -60,7 +60,7 @@ export default function LibraryPage() {
             if (!e.target.value.trim()) setSearchResults(null);
           }}
           placeholder="语义搜索..."
-          className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 dark:focus:ring-gray-600"
+          className="glynk-input"
         />
       </form>
 
@@ -78,7 +78,7 @@ export default function LibraryPage() {
               <Link
                 key={r.annotation_id}
                 to={`/read/${r.content_id}`}
-                className="block p-4 border border-gray-200 dark:border-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
+                className="block p-4 md:p-5 rounded-xl glass-panel hover:-translate-y-0.5 transition-transform duration-200"
               >
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
@@ -110,7 +110,7 @@ export default function LibraryPage() {
                 <Link
                   key={c.content_id}
                   to={`/read/${c.content_id}`}
-                  className="p-5 border border-gray-200 dark:border-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
+                  className="block p-4 md:p-5 rounded-xl glass-panel hover:-translate-y-0.5 transition-transform duration-200"
                 >
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-base" role="img">

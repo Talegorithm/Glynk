@@ -16,6 +16,7 @@ import { saveReadingProgress } from '../../api/content';
 import type { Annotation, TextSelectionAnchor } from '../../types/annotation';
 import type { FileContent } from '../../types/reader';
 import { getColorByKey, DEFAULT_COLOR } from '../../config/colors';
+import { useReaderSettingsStore } from '../../store/readerSettings';
 
 // 单个文件块组件
 const FileSection = memo(
@@ -122,6 +123,7 @@ FileSection.displayName = 'FileSection';
 
 export function ReaderContent() {
   const contentId = useReaderStore((state) => state.contentId);
+  const { fontSize, fontFamily } = useReaderSettingsStore();
   const loadedFiles = useReaderStore((state) => state.loadedFiles);
   const isLoading = useReaderStore((state) => state.isLoading);
   const isJumping = useReaderStore((state) => state.isJumping);
@@ -561,7 +563,13 @@ export function ReaderContent() {
   const editingAnchor = editingAnnotation?.anchor as TextSelectionAnchor | undefined;
 
   return (
-    <div className="reader-content-wrapper relative">
+    <div 
+      className="reader-content-wrapper relative"
+      style={{
+        '--reader-font-size': `${fontSize}px`,
+        '--reader-font-family': fontFamily === 'serif' ? "'Georgia', 'Songti SC', serif" : "'Inter', 'Helvetica Neue', 'PingFang SC', sans-serif"
+      } as any}
+    >
       <CitationPreview
         targetSpanId={citationTarget}
         onClose={() => setCitationTarget(null)}
@@ -652,10 +660,11 @@ export function ReaderContent() {
           -webkit-touch-callout: none;
           user-select: text;
           color: var(--reading-text);
+          font-size: var(--reader-font-size, 18px);
           line-height: 1.9;
           font-weight: 400;
           letter-spacing: 0.02em;
-          font-family: 'Georgia', 'Songti SC', serif;
+          font-family: var(--reader-font-family, 'Georgia', 'Songti SC', serif);
         }
         .reader-file-section { margin-bottom: 3rem; }
         .reader-content p { margin-bottom: 1.4em; text-align: justify; color: var(--reading-p); }

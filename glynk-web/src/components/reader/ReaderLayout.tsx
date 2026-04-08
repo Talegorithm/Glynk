@@ -79,7 +79,7 @@ export function ReaderLayout({ toolbar, toc, outline, content }: ReaderLayoutPro
   }, []);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-57px)] relative overflow-hidden bg-transparent">
+    <div className="flex flex-col h-screen relative overflow-hidden bg-transparent">
       {/* Remove the hardcoded subtle background gradient so we can see the glorious dynamic sky */}
       <div className="absolute inset-0 bg-white/30 dark:bg-gray-900/40 pointer-events-none" />
 
