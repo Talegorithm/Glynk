@@ -632,22 +632,20 @@ export function ReaderContent() {
           --reading-quote-bg: rgba(0,0,0,0.02);
           --reading-quote-border: rgba(0,0,0,0.1);
         }
-
-        @media (prefers-color-scheme: dark) {
-          :root {
-            --reading-bg: #0f1118;
-            --reading-text: #d4d4d8;
-            --reading-h1: #f4f4f5;
-            --reading-h2: #e4e4e7;
-            --reading-p: #a1a1aa;
-            --reading-meta: #52525b;
-            --reading-border: rgba(255,255,255,0.06);
-            --reading-highlight: rgba(168, 123, 25, 0.5);
-            --reading-code-bg: rgba(255,255,255,0.05);
-            --reading-code-text: #ff8f9c;
-            --reading-quote-bg: rgba(255,255,255,0.03);
-            --reading-quote-border: rgba(255,255,255,0.15);
-          }
+        
+        :root.dark {
+          --reading-bg: transparent;
+          --reading-text: #ffffff;
+          --reading-h1: #ffffff;
+          --reading-h2: #f4f4f5;
+          --reading-p: #e4e4e7;
+          --reading-meta: #a1a1aa;
+          --reading-border: rgba(255,255,255,0.15);
+          --reading-highlight: rgba(168, 123, 25, 0.5);
+          --reading-code-bg: rgba(255,255,255,0.1);
+          --reading-code-text: #ff8f9c;
+          --reading-quote-bg: rgba(255,255,255,0.05);
+          --reading-quote-border: rgba(255,255,255,0.25);
         }
 
         .reader-content {

@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+@custom-variant sky (&:where(.sky, .sky *));
 
 @layer utilities {
   .sky-background {
@@ -9,7 +11,11 @@
   }
 
   .glass-panel {
-    @apply bg-white/70 dark:bg-gray-900/70 backdrop-blur-md shadow-xl border border-white/20 dark:border-gray-700/30;
+    @apply bg-white dark:bg-gray-900 shadow-xl border border-gray-200 dark:border-gray-800;
+  }
+  
+  .sky .glass-panel {
+    @apply bg-white/40 dark:bg-black/30 backdrop-blur-2xl shadow-2xl border-white/30 dark:border-white/10;
   }
 }
 

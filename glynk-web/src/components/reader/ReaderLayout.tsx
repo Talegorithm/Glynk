@@ -79,9 +79,9 @@ export function ReaderLayout({ toolbar, toc, outline, content }: ReaderLayoutPro
   }, []);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-57px)] relative overflow-hidden bg-[#fdfcf8] dark:bg-[#0f1118]">
-      {/* 极简氛围背景，用于提升专注度，不干扰阅读 */}
-      <div className="absolute inset-0 bg-gradient-to-br from-[#fdfcf8]/50 to-[#f4f1e1]/30 dark:from-[#0f1118]/20 dark:to-[#1a1c23]/10 pointer-events-none" />
+    <div className="flex flex-col h-[calc(100vh-57px)] relative overflow-hidden bg-transparent">
+      {/* Remove the hardcoded subtle background gradient so we can see the glorious dynamic sky */}
+      <div className="absolute inset-0 bg-white/30 dark:bg-gray-900/40 pointer-events-none" />
 
       {/* 顶部工具栏 - 毛玻璃 */}
       <div className="flex-shrink-0 relative z-20 bg-white/70 dark:bg-gray-900/70 backdrop-blur-md border-b border-gray-200/50 dark:border-gray-700/50 shadow-sm">

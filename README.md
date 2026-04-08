@@ -103,4 +103,4 @@ annotation/    Unified storage + semantic search (PostgreSQL + pgvector)
 
 ## License
 
-MIT
+AGPL v3

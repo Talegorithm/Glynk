@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom';
-import { SkyBackground } from '../components/common/SkyBackground';
 
 const steps = [
   { emoji: '1', title: '导入', desc: '从 URL、文件或 API 导入内容，自动解析结构' },
@@ -11,8 +10,6 @@ const steps = [
 export default function LandingPage() {
   return (
     <div className="min-h-screen relative overflow-hidden">
-      <SkyBackground />
-      
       {/* 内容需放置于背景上层的相对容器 */}
       <div className="relative z-10 w-full h-full flex flex-col items-center">
         {/* Hero */}

@@ -9,10 +9,15 @@ import LoginPage from './pages/LoginPage';
 import LibraryPage from './pages/LibraryPage';
 import ReaderPage from './pages/ReaderPage';
 import NotesPage from './pages/NotesPage';
+import { TimeGradientBg } from './components/background/TimeGradientBg';
+import { useThemeStore } from './store/theme';
 
 export default function App() {
+  // Initialize theme tracking to apply classes
+  useThemeStore();
+
   return (
-    <>
+    <TimeGradientBg showStars={true}>
       <Toaster position="top-center" richColors />
       <Routes>
         <Route element={<Layout />}>
@@ -28,6 +33,6 @@ export default function App() {
           </Route>
         </Route>
       </Routes>
-    </>
+    </TimeGradientBg>
   );
 }

@@ -103,4 +103,4 @@ annotation/    统一存储 + 语义检索（PostgreSQL + pgvector）
 
 ## 许可
 
-MIT
+AGPL v3

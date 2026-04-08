@@ -1,13 +1,12 @@
-// 时间渐变背景 Hook
 import { useState, useEffect } from 'react';
 
-export type TimeOfDay = 'earlyMorning' | 'morning' | 'lateMorning' | 'noon' | 'afternoon' | 'evening' | 'night' | 'lateNight';
+type TimeOfDay = 'earlyMorning' | 'morning' | 'lateMorning' | 'noon' | 'afternoon' | 'evening' | 'night' | 'lateNight';
 
-export interface GradientConfig {
+interface GradientConfig {
   colors: string[];
   positions: number[];
 }
-// 时间渐变配置（8个时间段）
+
 const TIME_GRADIENTS: Record<TimeOfDay, GradientConfig> = {
   earlyMorning: {
     colors: ['#E4E4EA', '#D7DAE7', '#C4D1DE'],
@@ -43,9 +42,6 @@ const TIME_GRADIENTS: Record<TimeOfDay, GradientConfig> = {
   },
 };
 
-/**
- * 根据小时获取时间段类型
- */
 function getTimeOfDay(): TimeOfDay {
   const hour = new Date().getHours();
 
@@ -59,9 +55,6 @@ function getTimeOfDay(): TimeOfDay {
   return 'lateNight'; // 22:00-5:00
 }
 
-/**
- * 生成CSS渐变字符串
- */
 function generateGradientCSS(config: GradientConfig): string {
   const stops = config.colors
     .map((color, index) => `${color} ${config.positions[index]}%`)
@@ -70,18 +63,11 @@ function generateGradientCSS(config: GradientConfig): string {
   return `linear-gradient(180deg, ${stops})`;
 }
 
-/**
- * 检查是否为夜晚时间（显示星空）
- */
 export function isNightTime(): boolean {
   const hour = new Date().getHours();
   return hour >= 21 || hour < 5;
 }
 
-/**
- * 时间渐变Hook
- * @returns CSS渐变字符串 + 是否夜晚
- */
 export function useTimeGradient() {
   const [gradient, setGradient] = useState('');
   const [isNight, setIsNight] = useState(false);
@@ -96,10 +82,7 @@ export function useTimeGradient() {
       setIsNight(isNightTime());
     };
 
-    // 初始化
     updateGradient();
-
-    // 每分钟检查一次
     const interval = setInterval(updateGradient, 60000);
 
     return () => clearInterval(interval);
