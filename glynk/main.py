@@ -114,12 +114,12 @@ from glynk.api.annotation_router import router as annotation_router
 from glynk.api.source_router import router as source_router
 from glynk.api.feedback_router import router as feedback_router
 
-app.include_router(user_router)
-app.include_router(ingest_router)
-app.include_router(content_router)
-app.include_router(annotation_router)
-app.include_router(source_router)
-app.include_router(feedback_router)
+app.include_router(user_router, prefix="/api")
+app.include_router(ingest_router, prefix="/api")
+app.include_router(content_router, prefix="/api")
+app.include_router(annotation_router, prefix="/api")
+app.include_router(source_router, prefix="/api")
+app.include_router(feedback_router, prefix="/api")
 
 
 # ===== 静态文件：媒体（图片）=====

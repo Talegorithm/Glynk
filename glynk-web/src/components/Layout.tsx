@@ -12,7 +12,7 @@ export default function Layout() {
       <nav className="border-b border-gray-200/20 dark:border-gray-800/20 px-6 py-3 flex items-center justify-between glass-panel sticky top-0 z-50">
         <div className="flex items-center gap-6">
           <Link to="/" className="text-xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
-            glynk
+            Glynk
           </Link>
           {authenticated && (
             <>
