@@ -9,6 +9,7 @@ venv/
 
 # Environment
 .env
+dev.pem
 
 # Data
 Glynk-data/
@@ -31,6 +32,11 @@ webhook.log
 
 # Node (frontend)
 node_modules/
+
+# Deployment (contains server addresses, credentials, internal config)
+docker-compose.yml
+env/
+glynk-web/cd/
 
 # Vite cache
 .vite/

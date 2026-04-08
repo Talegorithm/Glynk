@@ -87,6 +87,11 @@ export default function LandingPage() {
           <p className="text-center text-sm font-medium text-gray-500 dark:text-gray-400 drop-shadow-sm">
             glynk.wiki &middot; 开放内容基础设施
           </p>
+          <p className="text-center text-xs text-gray-400 dark:text-gray-500 mt-3">
+            <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" className="hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+              京ICP备2024066391号-3
+            </a>
+          </p>
         </footer>
       </div>
     </div>
