@@ -58,10 +58,10 @@ async def read_content(
         size: 读取字符数
     """
     client = _get_client(context)
-    params = {"view": "ai", "size": size}
+    params = {"size": size}
     if from_span:
         params["from"] = from_span
-    r = client.get(f"/content/{content_id}/read", params=params)
+    r = client.get(f"/content/{content_id}/chunk", params=params)
     r.raise_for_status()
     data = r.json()
 
@@ -105,22 +105,44 @@ async def submit_outline(
     )
 
 
-@tool(description="批量提交标注（hooks/highlights）到 Glynk", hidden_params=["context"])
+@tool(description="批量提交 hooks 到 Glynk（每个 hook 只需提供 text、spans、tags）", hidden_params=["context"])
 async def submit_annotations(
-    annotations_json: str,
+    content_id: str,
+    hooks_json: str,
+    annotation_type: str = "hook",
     context: Optional[dict] = None,
 ) -> ToolResult:
-    """批量提交标注。
+    """批量提交 hooks。工具会自动填充 anchor 格式、type、color 等固定字段。
 
     Args:
-        annotations_json: 标注 JSON 数组字符串，每项包含 content_id, anchor, type, text, tags, contextuality
+        content_id: 内容 ID
+        hooks_json: JSON 数组字符串，每项包含 text(问题), spans(span_id 数组), tags(关键词数组), contextuality(可选，默认 standalone)
+                    示例: [{"text":"信息不足时怎么决策？","spans":["xxx-1-p3-s1"],"tags":["决策"]}]
+        annotation_type: 标注类型，默认 "hook"
     """
     client = _get_client(context)
-    annotations = json.loads(annotations_json)
+    hooks = json.loads(hooks_json)
+
+    # 将精简格式转换为完整 annotation 格式
+    annotations = []
+    for hook in hooks:
+        annotations.append({
+            "content_id": content_id,
+            "anchor": {
+                "type": "text",
+                "spans": hook["spans"],
+                "color": "ghost",
+            },
+            "type": annotation_type,
+            "text": hook["text"],
+            "tags": hook.get("tags", []),
+            "contextuality": hook.get("contextuality", "standalone"),
+        })
+
     r = client.post("/annotate/batch", json={"annotations": annotations})
     r.raise_for_status()
     data = r.json()
     return ToolResult(
-        title=f"Submitted {data['created']} annotations",
-        output=f"Created {data['created']} annotations: {data['ids']}",
+        title=f"Submitted {data['created']} hooks",
+        output=f"Created {data['created']} hooks: {data['ids']}",
     )

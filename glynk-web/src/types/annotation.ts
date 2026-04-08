@@ -1,22 +1,24 @@
+export interface TextSelectionAnchor {
+  type: 'text_selection';
+  spans: string[];
+  startSpanId: string;
+  endSpanId: string;
+  startOffset: number;
+  endOffset: number;
+  color: string;            // 'yellow' | 'green' | 'blue' | 'pink'
+  note?: string;            // 用户笔记（可选）
+  [key: string]: unknown;   // index signature for Record<string, unknown> compat
+}
+
 export interface Annotation {
-  annotation_id?: string;
+  id: string;
   content_id: string;
-  type: string;
+  anchor: TextSelectionAnchor | Record<string, unknown>;
+  type: string;  // 'highlight' | 'hook' | 'note' | 'reaction'
   text: string;
-  note?: string;
-  color?: string;
-  location?: string;
+  tags: string[];
+  contextuality: string;
+  source: string;
+  visibility: string;
   created_at?: string;
-  updated_at?: string;
-}
-
-export interface QueryResult {
-  annotation: Annotation;
-  score?: number;
-  content_title?: string;
-}
-
-export interface QueryResponse {
-  results: QueryResult[];
-  total: number;
 }

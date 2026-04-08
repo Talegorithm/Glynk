@@ -18,12 +18,14 @@ class TOCItem:
     """TOC 条目（目录项）"""
     title: str
     href: str
+    level: int = 1
     children: List[TOCItem] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
             "title": self.title,
             "href": self.href,
+            "level": self.level,
             "children": [c.to_dict() for c in self.children],
         }
 
@@ -32,6 +34,7 @@ class TOCItem:
         return TOCItem(
             title=data["title"],
             href=data.get("href", ""),
+            level=data.get("level", 1),
             children=[TOCItem.from_dict(c) for c in data.get("children", [])],
         )
 

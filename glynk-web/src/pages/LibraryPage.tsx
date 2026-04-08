@@ -21,7 +21,7 @@ export default function LibraryPage() {
 
   useEffect(() => {
     listContents(50, 0)
-      .then(setContents)
+      .then((res) => setContents(res.contents))
       .catch(() => toast.error('加载失败'))
       .finally(() => setLoading(false));
   }, []);
@@ -35,8 +35,8 @@ export default function LibraryPage() {
     }
     setLoading(true);
     try {
-      const results = await semanticSearch({ text: q, top_k: 20 });
-      setSearchResults(results);
+      const res = await semanticSearch({ text: q, top_k: 20 });
+      setSearchResults(res.results);
     } catch {
       toast.error('搜索失败');
     } finally {
@@ -76,7 +76,7 @@ export default function LibraryPage() {
           ) : (
             searchResults.map((r) => (
               <Link
-                key={r.id}
+                key={r.annotation_id}
                 to={`/read/${r.content_id}`}
                 className="block p-4 border border-gray-200 dark:border-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
               >

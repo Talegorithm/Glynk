@@ -42,23 +42,29 @@ def read_epub(file_path: Path) -> dict:
 
     html_parts = []
     file_names = []
-    for item in book.get_items():
-        if item.get_type() == ebooklib.ITEM_DOCUMENT:
-            item_name = item.get_name()
-            if any(toc_name in item_name for toc_name in toc_filenames):
+    
+    # Use spine to preserve correct physical reading order
+    for item_tuple in book.spine:
+        item_id = item_tuple[0]
+        item = book.get_item_with_id(item_id)
+        if not item or item.get_type() != ebooklib.ITEM_DOCUMENT:
+            continue
+
+        item_name = item.get_name()
+        if any(toc_name in item_name for toc_name in toc_filenames):
+            continue
+
+        try:
+            html_content = item.get_content().decode('utf-8')
+
+            if _is_toc_document(html_content):
                 continue
 
-            try:
-                html_content = item.get_content().decode('utf-8')
-
-                if _is_toc_document(html_content):
-                    continue
-
-                base_name = item_name.split('/')[-1]
-                html_parts.append(html_content)
-                file_names.append(base_name)
-            except Exception as e:
-                logger.warning(f"Skipping unreadable chapter: {e}")
+            base_name = item_name.split('/')[-1]
+            html_parts.append(html_content)
+            file_names.append(base_name)
+        except Exception as e:
+            logger.warning(f"Skipping unreadable chapter: {e}")
 
     if not html_parts:
         raise ValueError(f"No HTML content found in EPUB: {file_path}")

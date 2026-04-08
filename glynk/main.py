@@ -124,7 +124,7 @@ app.include_router(feedback_router)
 
 # ===== 静态文件：媒体（图片）=====
 
-@app.get("/api/media/{content_id}/{filename}")
+@app.get("/media/{content_id}/{filename}")
 async def get_media(content_id: str, filename: str):
     """提供内容图片"""
     config = AppConfig.from_env()

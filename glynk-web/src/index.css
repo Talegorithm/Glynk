@@ -1,1 +1,20 @@
 @import "tailwindcss";
+
+@layer utilities {
+  .sky-background {
+    @apply fixed top-0 left-0 w-screen h-screen -z-10;
+    background-size: 300% 300%;
+    animation: skyFlow 15s ease-in-out infinite;
+    transition: background-image 2s ease;
+  }
+
+  .glass-panel {
+    @apply bg-white/70 dark:bg-gray-900/70 backdrop-blur-md shadow-xl border border-white/20 dark:border-gray-700/30;
+  }
+}
+
+@keyframes skyFlow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}

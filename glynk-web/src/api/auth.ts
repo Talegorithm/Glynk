@@ -2,7 +2,7 @@ import client from './client';
 import type { User, RegisterResponse, LoginResponse } from '../types/auth';
 
 export async function register(data: {
-  uid: string;
+  uid?: string;
   email?: string;
 }): Promise<RegisterResponse> {
   const res = await client.post<RegisterResponse>('/users', data);
@@ -10,7 +10,9 @@ export async function register(data: {
 }
 
 export async function loginByToken(token: string): Promise<LoginResponse> {
-  const res = await client.post<LoginResponse>('/users/login', { token });
+  const res = await client.get<LoginResponse>('/users/me', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   return res.data;
 }
 

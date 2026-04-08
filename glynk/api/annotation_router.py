@@ -164,6 +164,41 @@ async def get_user_annotations(
     return {"annotations": annotations, "total": total}
 
 
+class UpdateAnnotationRequest(BaseModel):
+    text: str | None = None
+    anchor: dict | None = None
+
+
+@router.delete("/annotations/{annotation_id}")
+async def delete_annotation(annotation_id: str, user: dict = Depends(get_current_user)):
+    """删除标注（仅限本人）"""
+    if _annotation_service is None:
+        raise HTTPException(500, "Service not initialized")
+    deleted = _annotation_service.delete(annotation_id, user["uid"])
+    if not deleted:
+        raise HTTPException(404, "Annotation not found or not owned by you")
+    return {"ok": True}
+
+
+@router.patch("/annotations/{annotation_id}")
+async def update_annotation(annotation_id: str, req: UpdateAnnotationRequest,
+                            user: dict = Depends(get_current_user)):
+    """更新标注（仅限本人）"""
+    if _annotation_service is None:
+        raise HTTPException(500, "Service not initialized")
+    updates = {}
+    if req.text is not None:
+        updates["text"] = req.text
+    if req.anchor is not None:
+        updates["anchor"] = req.anchor
+    if not updates:
+        raise HTTPException(400, "Nothing to update")
+    result = _annotation_service.update(annotation_id, user["uid"], **updates)
+    if not result:
+        raise HTTPException(404, "Annotation not found or not owned by you")
+    return result
+
+
 @router.post("/annotations/search")
 async def search_user_annotations(req: SearchRequest,
                                   user: dict = Depends(get_current_user)):

@@ -5,7 +5,7 @@ RichMediaEnhancer - 富媒体统一增强器
 """
 from bs4 import BeautifulSoup, NavigableString, Tag
 import re
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 
 class RichMediaEnhancer:
@@ -53,11 +53,16 @@ class RichMediaEnhancer:
             return next_sibling is not None and next_sibling.name == 'img'
         return next_sibling is not None and next_sibling.name == 'table'
 
-    def _calculate_caption_score(self, elem: Tag, target_type: str = 'figure') -> int:
+    def _calculate_caption_score(self, elem: Tag, target_type: str = 'both') -> int:
+        if elem.find(['img', 'figure', 'table']):
+            return -100
+
         score = 0
         text = elem.get_text().strip()
-        pattern = self.FIGURE_CONTENT_PATTERN if target_type == 'figure' else self.TABLE_CONTENT_PATTERN
-        if re.match(pattern, text, re.IGNORECASE):
+        
+        if target_type in ('figure', 'both') and re.match(self.FIGURE_CONTENT_PATTERN, text, re.IGNORECASE):
+            score += 50
+        if target_type in ('table', 'both') and re.match(self.TABLE_CONTENT_PATTERN, text, re.IGNORECASE):
             score += 50
         if self._has_caption_style(elem):
             score += 30
@@ -65,7 +70,7 @@ class RichMediaEnhancer:
             score += 20
         return score
 
-    def _is_likely_caption(self, elem: Tag, target_type: str = 'figure') -> bool:
+    def _is_likely_caption(self, elem: Tag, target_type: str = 'both') -> bool:
         return self._calculate_caption_score(elem, target_type) >= 50
 
     def _is_footnote_marker_image(self, img: Tag) -> bool:
@@ -130,14 +135,22 @@ class RichMediaEnhancer:
                     old_caption = existing_figure.find('figcaption')
                     if old_caption:
                         old_caption.string = caption_text
+                        old_caption.clear()
+                        if isinstance(caption_elem_or_text, Tag):
+                            figcaption.append(caption_elem_or_text)
+                        else:
+                            old_caption.string = caption_elem_or_text
                     else:
                         figcaption = soup.new_tag('figcaption')
-                        figcaption.string = caption_text
+                        if isinstance(caption_elem_or_text, Tag):
+                            figcaption.append(caption_elem_or_text)
+                        else:
+                            figcaption.string = caption_elem_or_text
                         existing_figure.append(figcaption)
                     if elem_to_remove:
                         elem_to_remove.extract()
             else:
-                caption_text, elem_to_remove = self._find_caption_for_img(img, content_id)
+                caption_elem_or_text, elem_to_remove = self._find_caption_for_img(img, content_id)
 
                 figure = soup.new_tag('figure')
                 figure['class'] = 'content-figure'
@@ -147,9 +160,12 @@ class RichMediaEnhancer:
                 img.replace_with(figure)
                 figure.append(img_copy)
 
-                if caption_text:
+                if caption_elem_or_text:
                     figcaption = soup.new_tag('figcaption')
-                    figcaption.string = caption_text
+                    if isinstance(caption_elem_or_text, Tag):
+                        figcaption.append(caption_elem_or_text)
+                    else:
+                        figcaption.string = caption_elem_or_text
                     figure.append(figcaption)
 
                 if elem_to_remove:
@@ -157,18 +173,64 @@ class RichMediaEnhancer:
 
                 figure_counter += 1
 
-    def _find_caption_for_img(self, img: Tag, content_id: str) -> Tuple[Optional[str], Optional[Tag]]:
-        prev_sibling = img.find_previous_sibling('p')
-        if prev_sibling and self._is_likely_caption(prev_sibling, target_type='figure'):
-            return prev_sibling.get_text().strip(), prev_sibling
+    def _find_caption_for_img(self, img: Tag, content_id: str) -> Tuple[Optional[Union[str, Tag]], Optional[Tag]]:
+        # 1. Identify anchors: the img itself, and its structural parents (up to 3 levels)
+        anchors = [img]
+        current = img.parent
+        for _ in range(3):
+            if not current or current.name in ['body', 'html', 'article', 'main']:
+                break
+            anchors.append(current)
+            current = current.parent
 
-        next_sibling = img.find_next_sibling('p')
-        if next_sibling and self._is_likely_caption(next_sibling, target_type='figure'):
-            return next_sibling.get_text().strip(), next_sibling
+        target_tags = ['p', 'div', 'figcaption', 'h5', 'h6', 'h4', 'caption']
 
-        alt = img.get('alt', '').strip()
-        if alt and not re.match(r'^p\d+x+-\d+$', alt):
-            return alt, None
+        # 2. Helper to scan immediate siblings (handling empty white space nodes naturally)
+        def _scan_siblings(anchor: Tag, forwards: bool):
+            generator = anchor.next_siblings if forwards else anchor.previous_siblings
+            for sibling in generator:
+                if not isinstance(sibling, Tag):
+                    if sibling.strip():  # non-empty text node
+                        return None, None
+                    continue
+                
+                # We found a tag
+                if not sibling.get_text(strip=True):
+                    continue # Skip empty tags like <br> or empty <p>
+                
+                # Does the sibling match our criteria?
+                if sibling.name in target_tags:
+                    if self._is_likely_caption(sibling, target_type='both'):
+                        return sibling, sibling
+                    return None, None
+                
+                if sibling.name == 'div':
+                    child = sibling.find(target_tags)
+                    if child and child.get_text(strip=True):
+                        if self._is_likely_caption(child, target_type='both'):
+                            # remove the whole wrapper or just the child? Remove the whole wrapper
+                            return child, sibling
+                
+                # Stop at the first significant block tag
+                if sibling.name in ['p', 'div', 'table', 'section', 'h1', 'h2', 'h3', 'h4']:
+                    break
+            return None, None
+
+        # Try scanning front and back around the anchors from innermost to outermost
+        for anchor in anchors:
+            caption, elem = _scan_siblings(anchor, forwards=False)
+            if caption: return caption, elem
+            
+            caption, elem = _scan_siblings(anchor, forwards=True)
+            if caption: return caption, elem
+
+        # 3. Check if any anchor itself contains the caption text (e.g. <p><img/> Figure 1.2</p>)
+        for anchor in anchors:
+            if anchor.name in target_tags and anchor != img:
+                text = anchor.get_text(separator=' ', strip=True)
+                if text and self._calculate_caption_score(anchor, target_type='both') >= 50:
+                    # Return anchor as the "element" to be used as content, but None to extract so we don't delete it
+                    return anchor, None
 
         return None, None
 
@@ -189,11 +251,9 @@ class RichMediaEnhancer:
             prev_sibling = table.find_previous_sibling()
             if prev_sibling and prev_sibling.name == 'p':
                 if self._is_likely_caption(prev_sibling, target_type='table'):
-                    caption_text = prev_sibling.get_text().strip()
                     caption = soup.new_tag('caption')
-                    caption.string = caption_text
+                    caption.append(prev_sibling)
                     table.insert(0, caption)
-                    prev_sibling.extract()
 
             table.replace_with(wrapper)
             wrapper.append(table)

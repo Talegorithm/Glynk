@@ -16,8 +16,8 @@ export default function ExplorePage() {
 
     setLoading(true);
     try {
-      const data = await semanticSearch({ text: q, top_k: 20 });
-      setResults(data);
+      const res = await semanticSearch({ text: q, top_k: 20 });
+      setResults(res.results);
       setSearched(true);
     } catch {
       setResults([]);
@@ -58,7 +58,7 @@ export default function ExplorePage() {
       <div className="space-y-4">
         {results.map((r) => (
           <Link
-            key={r.id}
+            key={r.annotation_id}
             to={`/read/${r.content_id}`}
             className="block p-5 border border-gray-200 dark:border-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
           >

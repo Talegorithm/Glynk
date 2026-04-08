@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { SkyBackground } from '../components/common/SkyBackground';
 
 const steps = [
   { emoji: '1', title: '导入', desc: '从 URL、文件或 API 导入内容，自动解析结构' },
@@ -9,81 +10,88 @@ const steps = [
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen">
-      {/* Hero */}
-      <section className="px-6 py-32 md:py-48 max-w-3xl mx-auto text-center">
-        <h1 className="text-4xl md:text-6xl font-semibold tracking-tight text-gray-900 dark:text-gray-100 leading-tight">
-          好内容不该被埋没
-        </h1>
-        <p className="mt-6 text-lg md:text-xl text-gray-500 dark:text-gray-400 max-w-xl mx-auto leading-relaxed">
-          Glynk 是 Agent 时代的开放内容基础设施。导入、标注、语义搜索 —— 让知识自由流动。
-        </p>
-        <div className="mt-10 flex items-center justify-center gap-4">
-          <Link
-            to="/register"
-            className="px-6 py-2.5 bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
-          >
-            开始使用
-          </Link>
-          <Link
-            to="/docs"
-            className="px-6 py-2.5 border border-gray-300 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
-          >
-            查看 API 文档
-          </Link>
-        </div>
-      </section>
+    <div className="min-h-screen relative overflow-hidden">
+      <SkyBackground />
+      
+      {/* 内容需放置于背景上层的相对容器 */}
+      <div className="relative z-10 w-full h-full flex flex-col items-center">
+        {/* Hero */}
+        <section className="px-6 py-32 md:py-48 max-w-3xl mx-auto text-center w-full">
+          <div className="glass-panel rounded-3xl p-10 md:p-14 transition-all duration-500 hover:shadow-2xl hover:-translate-y-2 inline-block shadow-lg mx-auto w-full">
+            <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-gray-900 dark:text-white leading-tight">
+              好内容不该被埋没
+            </h1>
+            <p className="mt-8 text-lg md:text-xl text-gray-700 dark:text-gray-300 max-w-xl mx-auto leading-relaxed">
+              Glynk 是 Agent 时代的开放内容基础设施。<br/><span className="inline-block mt-2 font-medium text-blue-600 dark:text-blue-400">导入、标注、语义搜索 —— 让知识自由流动。</span>
+            </p>
+            <div className="mt-12 flex items-center justify-center gap-4 flex-wrap">
+              <Link
+                to="/register"
+                className="px-8 py-3.5 bg-blue-600 shadow-blue-500/30 shadow-lg text-white rounded-xl text-base font-semibold hover:bg-blue-700 hover:-translate-y-0.5 transition-all w-full sm:w-auto text-center"
+              >
+                开始使用
+              </Link>
+              <Link
+                to="/docs"
+                className="px-8 py-3.5 bg-white/50 dark:bg-gray-800/50 backdrop-blur border border-white/40 dark:border-gray-700/50 rounded-xl text-base font-semibold text-gray-800 dark:text-gray-200 hover:bg-white/80 dark:hover:bg-gray-700/80 hover:-translate-y-0.5 transition-all w-full sm:w-auto text-center"
+              >
+                查看 API 文档
+              </Link>
+            </div>
+          </div>
+        </section>
 
-      {/* How it works */}
-      <section className="border-t border-gray-200 dark:border-gray-800 px-6 py-24">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-center text-sm font-medium tracking-widest uppercase text-gray-400 dark:text-gray-500 mb-16">
-            How it works
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-12 md:gap-8">
-            {steps.map((step) => (
-              <div key={step.title} className="text-center md:text-left">
-                <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 text-sm font-medium text-gray-600 dark:text-gray-400 mb-4">
-                  {step.emoji}
+        {/* How it works */}
+        <section className="px-6 py-24 w-full">
+          <div className="max-w-5xl mx-auto">
+            <h2 className="text-center text-sm font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400 mb-16 drop-shadow-sm">
+              How It Works
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+              {steps.map((step) => (
+                <div key={step.title} className="glass-panel rounded-2xl p-8 text-center md:text-left transition-all duration-300 hover:shadow-xl hover:-translate-y-1">
+                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-blue-100/80 dark:bg-blue-900/50 text-xl shadow-inner mb-6">
+                    {step.emoji}
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+                    {step.title}
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed font-medium">
+                    {step.desc}
+                  </p>
                 </div>
-                <h3 className="text-base font-medium text-gray-900 dark:text-gray-100 mb-2">
-                  {step.title}
-                </h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
-                  {step.desc}
-                </p>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Developer */}
-      <section className="border-t border-gray-200 dark:border-gray-800 px-6 py-24">
-        <div className="max-w-2xl mx-auto">
-          <h2 className="text-center text-sm font-medium tracking-widest uppercase text-gray-400 dark:text-gray-500 mb-10">
-            For Developers
-          </h2>
-          <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6 overflow-x-auto">
-            <pre className="text-sm text-gray-700 dark:text-gray-300 font-mono leading-relaxed whitespace-pre">
-{`curl -X POST https://glynk.wiki/api/search/semantic \\
-  -H "Authorization: Bearer <your-token>" \\
-  -H "Content-Type: application/json" \\
-  -d '{"text": "如何理解注意力机制", "top_k": 5}'`}
-            </pre>
+        {/* Developer */}
+        <section className="px-6 py-24 w-full">
+          <div className="max-w-3xl mx-auto glass-panel rounded-3xl p-10 md:p-12 hover:-translate-y-1 transition-transform duration-300">
+            <h2 className="text-center text-sm font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400 mb-10 drop-shadow-sm">
+              For Developers
+            </h2>
+            <div className="bg-gray-900/90 dark:bg-black/90 backdrop-blur border border-gray-700/50 rounded-2xl p-6 overflow-x-auto shadow-2xl">
+              <pre className="text-sm text-gray-300 font-mono leading-relaxed whitespace-pre">
+  {`curl -X POST https://glynk.wiki/api/search/semantic \\
+    -H "Authorization: Bearer <your-token>" \\
+    -H "Content-Type: application/json" \\
+    -d '{"text": "如何理解注意力机制", "top_k": 5}'`}
+              </pre>
+            </div>
+            <p className="mt-8 text-center text-sm font-medium text-gray-600 dark:text-gray-400">
+              RESTful API, 语义搜索, 批量操作 —— 一切为自动化而生
+            </p>
           </div>
-          <p className="mt-6 text-center text-sm text-gray-400 dark:text-gray-500">
-            RESTful API, 语义搜索, 批量操作 —— 一切为自动化而生
+        </section>
+
+        {/* Footer */}
+        <footer className="w-full border-t border-white/20 dark:border-gray-800/50 px-6 py-12 mt-10">
+          <p className="text-center text-sm font-medium text-gray-500 dark:text-gray-400 drop-shadow-sm">
+            glynk.wiki &middot; 开放内容基础设施
           </p>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="border-t border-gray-200 dark:border-gray-800 px-6 py-12 text-center">
-        <p className="text-sm text-gray-400 dark:text-gray-500">
-          glynk.wiki &middot; 开放内容基础设施
-        </p>
-      </footer>
+        </footer>
+      </div>
     </div>
   );
 }

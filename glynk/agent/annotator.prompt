@@ -42,17 +42,18 @@ Hook 是**反推出来的问题**。核心思路：
 
 > 假设这段内容是"答案"，读者可能出于什么情感困惑、生活经验、思考兴趣提出一个问题，而这段内容恰好提供了启发？
 
-每个 hook 是一条 annotation：
+每个 hook 需要提供：
 ```json
 {
-  "content_id": "...",
-  "anchor": {"type": "text", "spans": ["content_id-file-pN-sM", ...]},
-  "type": "hook",
   "text": "信息不完整的时候，等待和行动哪个风险更大？",
+  "spans": ["content_id-file-pN-sM", ...],
   "tags": ["决策", "不确定性"],
   "contextuality": "standalone"
 }
 ```
+
+- `contextuality`：`standalone`（脱离原文可理解）或 `embedded`（需要原文上下文）
+- 调用 `submit_annotations` 时传入 `content_id` 和这些 hook 的 JSON 数组，工具自动填充 anchor 格式和颜色。
 
 **关键要求**：
 1. **问题要脱离具体情节**：让没读过这本书的人也能理解（"信息不足时怎么决策"而不是"Peter Thiel 认为什么"）

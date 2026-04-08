@@ -42,73 +42,36 @@ class ReaderService:
         self.locator = SpanLocator(html_root=html_root)
         self.db = db
 
-    def read(self, content_id: str, from_span: str = None,
-             size: int = None, view: str = "human",
-             lang: str = None, uid: str = None) -> ReadResponse:
-        """
-        统一阅读接口。
+    def read_file(self, content_id: str, file_idx: int = None, from_span: str = None,
+                  lang: str = None, uid: str = None) -> ReadResponse:
+        """加载完整文件（前端阅读器使用）"""
+        if file_idx is None:
+            if from_span:
+                parsed = parse_span_id(from_span)
+                file_idx = parsed['file_idx']
+            else:
+                file_idx = 0
 
-        Args:
-            content_id: 内容ID
-            from_span: 起始 span_id（可选，默认从头）
-            size: 读取字符数（可选，默认当前文件剩余）
-            view: 'ai' 或 'human'
-            lang: 翻译语言（仅 human 视图）
-            uid: 用户 uid（用于获取 private 标注）
-        """
-        if from_span:
-            parsed = parse_span_id(from_span)
-            file_idx = parsed['file_idx']
-        else:
-            file_idx = 0
-
-        if size:
-            # 按指定量读取
-            start = from_span or self._get_first_span(content_id, file_idx)
-
-            # 如果指定的 span 或文件不存在，向后找有内容的文件
-            if not start or not self._span_exists(content_id, start):
-                for idx in range(file_idx, file_idx + 50):
-                    start = self._get_first_span(content_id, idx)
-                    if start:
-                        break
-
-            if not start:
-                return ReadResponse(content="", from_span="", to_span="",
-                                    char_count=0, has_more=False)
-
-            located = self.locator.get_content_from_location(content_id, start, size)
-            html = located.html
-            from_span_actual = located.start_location
-            to_span_actual = located.end_location
-            char_count = located.char_count
-            has_more = located.has_more
-
-            # Calculate next_from
-            next_from = None
-            if has_more:
-                next_from = self._get_next_span(content_id, to_span_actual)
-        else:
-            # 加载整个文件，跳过空文件（封面/版权页等）
-            html, from_span_actual, to_span_actual, char_count = self._load_file(
-                content_id, file_idx
-            )
-            # 跳过没有 span 的文件（封面、版权页等）
-            while not self._get_first_span(content_id, file_idx):
-                file_idx += 1
-                if not (self.html_root / content_id / f"{file_idx}.html").exists():
-                    break
+        # 加载整个文件，跳过空文件（封面/版权页等）
+        html, from_span_actual, to_span_actual, char_count = self._load_file(
+            content_id, file_idx
+        )
+        # 跳过没有 span 的文件（封面、版权页等）
+        while not self._get_first_span(content_id, file_idx):
+            file_idx += 1
+            if not (self.html_root / content_id / f"{file_idx}.html").exists():
+                break
             html, from_span_actual, to_span_actual, char_count = self._load_file(
                 content_id, file_idx
             )
 
-            next_file = self.html_root / content_id / f"{file_idx + 1}.html"
-            has_more = next_file.exists()
-            next_from = self._get_first_span(content_id, file_idx + 1) if has_more else None
+        next_file = self.html_root / content_id / f"{file_idx + 1}.html"
+        has_more = next_file.exists()
+        next_from = self._get_first_span(content_id, file_idx + 1) if has_more else None
 
-        # 翻译（human 视图 + 指定语言）
+        # 翻译
         translation_status = "original"
-        if view == "human" and lang:
+        if lang:
             translated_path = self.html_root / content_id / f"{file_idx}.{lang}.html"
             if translated_path.exists():
                 html = translated_path.read_text(encoding='utf-8')
@@ -116,14 +79,7 @@ class ReaderService:
             else:
                 translation_status = "not_available"
 
-        # AI 视图过滤
-        if view == "ai":
-            html = to_ai_view(html)
-
-        # 获取该范围内的标注
-        annotations = []
-        if self.db:
-            annotations = self.db.get_annotations(content_id, uid=uid)
+        annotations = self.db.get_annotations(content_id, uid=uid) if self.db else []
 
         return ReadResponse(
             content=html,
@@ -133,6 +89,46 @@ class ReaderService:
             has_more=has_more,
             next_from=next_from,
             translation_status=translation_status,
+            annotations=annotations,
+        )
+
+    def read_chunk(self, content_id: str, size: int, from_span: str = None,
+                   uid: str = None) -> ReadResponse:
+        """加载指定字数的切片（AI Agent使用）"""
+        if from_span:
+            parsed = parse_span_id(from_span)
+            file_idx = parsed['file_idx']
+        else:
+            file_idx = 0
+
+        start = from_span or self._get_first_span(content_id, file_idx)
+
+        if not start or not self._span_exists(content_id, start):
+            for idx in range(file_idx, file_idx + 50):
+                start = self._get_first_span(content_id, idx)
+                if start:
+                    break
+
+        if not start:
+            return ReadResponse(content="", from_span="", to_span="",
+                                char_count=0, has_more=False)
+
+        located = self.locator.get_content_from_location(content_id, start, size)
+        html = to_ai_view(located.html)  # AI filter
+        
+        has_more = located.has_more
+        next_from = self._get_next_span(content_id, located.end_location) if has_more else None
+
+        annotations = self.db.get_annotations(content_id, uid=uid) if self.db else []
+
+        return ReadResponse(
+            content=html,
+            from_span=located.start_location,
+            to_span=located.end_location,
+            char_count=located.char_count,
+            has_more=has_more,
+            next_from=next_from,
+            translation_status="original",
             annotations=annotations,
         )
 

@@ -107,6 +107,27 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS reading_progress (
+    uid TEXT NOT NULL,
+    content_id TEXT NOT NULL,
+    span_id TEXT NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (uid, content_id)
+);
+
+CREATE TABLE IF NOT EXISTS reading_sessions (
+    id TEXT PRIMARY KEY,
+    uid TEXT NOT NULL,
+    content_id TEXT NOT NULL,
+    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    ended_at TIMESTAMP,
+    duration_seconds INTEGER,
+    source TEXT DEFAULT 'manual'
+);
+
+CREATE INDEX IF NOT EXISTS idx_rs_uid ON reading_sessions(uid);
+CREATE INDEX IF NOT EXISTS idx_rs_content ON reading_sessions(content_id);
+
 CREATE TABLE IF NOT EXISTS translations (
     content_id TEXT NOT NULL REFERENCES contents(content_id) ON DELETE CASCADE,
     file_idx INT NOT NULL,
@@ -341,6 +362,34 @@ class PostgresStore:
         )
         return result['count'] if result else 0
 
+    def delete_annotation(self, ann_id: str, uid: str) -> bool:
+        result = self._execute(
+            "DELETE FROM annotations WHERE id = %s AND uid = %s RETURNING id",
+            (ann_id, uid), fetch='one'
+        )
+        return result is not None
+
+    def update_annotation(self, ann_id: str, uid: str, **kwargs) -> Optional[dict]:
+        sets = []
+        params = []
+        for k, v in kwargs.items():
+            if k == 'anchor':
+                sets.append(f"{k} = %s")
+                params.append(Json(v))
+            else:
+                sets.append(f"{k} = %s")
+                params.append(v)
+        if not sets:
+            return None
+        params.extend([ann_id, uid])
+        sql = f"""
+            UPDATE annotations SET {', '.join(sets)}
+            WHERE id = %s AND uid = %s
+            RETURNING id, content_id, anchor, type, text, tags, contextuality,
+                      source, visibility, created_at
+        """
+        return self._execute(sql, tuple(params), fetch='one')
+
     def get_span_crowd_count(self, span_id: str) -> int:
         sql = """
             SELECT COUNT(DISTINCT uid) as count FROM annotations
@@ -437,6 +486,45 @@ class PostgresStore:
 
     def get_user_by_email(self, email: str) -> Optional[dict]:
         return self._execute("SELECT * FROM users WHERE email = %s", (email,), fetch='one')
+
+    # --- Reading Progress ---
+
+    def upsert_reading_progress(self, uid: str, content_id: str, span_id: str) -> bool:
+        sql = """
+            INSERT INTO reading_progress (uid, content_id, span_id, updated_at)
+            VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+            ON CONFLICT (uid, content_id) DO UPDATE SET
+                span_id = EXCLUDED.span_id,
+                updated_at = CURRENT_TIMESTAMP
+        """
+        self._execute(sql, (uid, content_id, span_id))
+        return True
+
+    def get_reading_progress(self, uid: str, content_id: str) -> Optional[dict]:
+        return self._execute(
+            "SELECT span_id, updated_at FROM reading_progress WHERE uid = %s AND content_id = %s",
+            (uid, content_id), fetch='one'
+        )
+
+    # --- Reading Sessions ---
+
+    def create_reading_session(self, session_id: str, uid: str,
+                               content_id: str, source: str = 'manual') -> bool:
+        sql = """
+            INSERT INTO reading_sessions (id, uid, content_id, source)
+            VALUES (%s, %s, %s, %s)
+        """
+        self._execute(sql, (session_id, uid, content_id, source))
+        return True
+
+    def end_reading_session(self, session_id: str, duration_seconds: int = None) -> bool:
+        sql = """
+            UPDATE reading_sessions
+            SET ended_at = CURRENT_TIMESTAMP, duration_seconds = %s
+            WHERE id = %s
+        """
+        self._execute(sql, (duration_seconds, session_id))
+        return True
 
     # --- Vector search ---
 

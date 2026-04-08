@@ -65,6 +65,12 @@ class AnnotationService:
     def count_by_uid(self, uid: str, content_id: str = None, type: str = None) -> int:
         return self.db.count_user_annotations(uid=uid, content_id=content_id, type=type)
 
+    def delete(self, ann_id: str, uid: str) -> bool:
+        return self.db.delete_annotation(ann_id, uid)
+
+    def update(self, ann_id: str, uid: str, **kwargs) -> dict | None:
+        return self.db.update_annotation(ann_id, uid, **kwargs)
+
     async def search_user_annotations(self, uid: str, query: str, top_k: int = 10) -> list[dict]:
         vector = await generate_embedding(query, self.embedding_config)
         return await self.vector_store.search(

@@ -1,222 +1,127 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
-import { toast } from 'sonner';
-import { readContent, getOutline } from '../api/content';
-import { createAnnotation } from '../api/annotation';
-import type { ReadResponse, OutlineItem } from '../types/content';
+/**
+ * 阅读器页面 - 从 Brainow 迁移，适配 Glynk
+ */
 
-interface FloatingToolbar {
-  top: number;
-  left: number;
-  text: string;
-}
+import { useEffect, useRef } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
+import { useReaderStore } from '../store/reader';
+import { ReaderLayout } from '../components/reader/ReaderLayout';
+import { ReaderToolbar } from '../components/reader/ReaderToolbar';
+import { ReaderTOC } from '../components/reader/ReaderTOC';
+import { ReaderOutline } from '../components/reader/ReaderOutline';
+import { ReaderContent } from '../components/reader/ReaderContent';
+import { getReadingProgress, startReadingSession, endReadingSession } from '../api/content';
+import { useAuthStore } from '../store/auth';
 
 export default function ReaderPage() {
-  const { contentId, fileIdx } = useParams<{ contentId: string; fileIdx: string }>();
+  const { contentId } = useParams<{ contentId: string }>();
   const [searchParams] = useSearchParams();
-  const spanId = searchParams.get('loc');
+  const locParam = searchParams.get('loc');
 
-  const [data, setData] = useState<ReadResponse | null>(null);
-  const [outline, setOutline] = useState<OutlineItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [toolbar, setToolbar] = useState<FloatingToolbar | null>(null);
-  const [noteText, setNoteText] = useState('');
-  const [showNoteInput, setShowNoteInput] = useState(false);
-  const contentRef = useRef<HTMLDivElement>(null);
+  const init = useReaderStore((state) => state.init);
+  const jumpToLocation = useReaderStore((state) => state.jumpToLocation);
+  const reset = useReaderStore((state) => state.reset);
+  const isLoading = useReaderStore((state) => state.isLoading);
 
+  const token = useAuthStore((state) => state.token);
+  const sessionIdRef = useRef<string | null>(null);
+  const sessionStartRef = useRef<number>(0);
+  const initedRef = useRef(false);
+
+  // 初始化阅读器
   useEffect(() => {
-    if (!contentId) return;
+    if (!contentId || initedRef.current) return;
+    initedRef.current = true;
 
-    setLoading(true);
-    const fileIdxNum = fileIdx != null ? Number(fileIdx) : undefined;
+    const doInit = async () => {
+      await init(contentId);
 
-    Promise.all([
-      readContent(contentId, fileIdxNum != null ? { from: fileIdxNum } : undefined),
-      getOutline(contentId),
-    ])
-      .then(([readRes, outlineRes]) => {
-        setData(readRes);
-        setOutline(outlineRes);
-      })
-      .catch(() => toast.error('加载内容失败'))
-      .finally(() => setLoading(false));
-  }, [contentId, fileIdx]);
+      // 如果 URL 有 loc 参数，跳转到指定位置
+      if (locParam) {
+        await jumpToLocation(locParam);
+      } else if (token) {
+        // 否则检查阅读进度
+        const progress = await getReadingProgress(contentId);
+        if (progress?.span_id) {
+          await jumpToLocation(progress.span_id);
+        }
+      }
+    };
 
-  // Scroll to span on load
+    doInit();
+  }, [contentId, locParam, init, jumpToLocation, token]);
+
+  // 阅读会话追踪
   useEffect(() => {
-    if (!spanId || !data) return;
-    const el = document.getElementById(spanId);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      el.classList.add('bg-yellow-100', 'dark:bg-yellow-900/30');
-    }
-  }, [spanId, data]);
+    if (!contentId || !token) return;
 
-  const handleMouseUp = useCallback(() => {
-    const selection = window.getSelection();
-    if (!selection || selection.isCollapsed || !selection.toString().trim()) {
-      setToolbar(null);
-      setShowNoteInput(false);
-      return;
-    }
+    sessionStartRef.current = Date.now();
 
-    const range = selection.getRangeAt(0);
-    const rect = range.getBoundingClientRect();
-    setToolbar({
-      top: rect.top + window.scrollY - 48,
-      left: rect.left + rect.width / 2,
-      text: selection.toString().trim(),
-    });
-    setShowNoteInput(false);
-    setNoteText('');
-  }, []);
+    // 确定来源
+    const source = locParam ? 'direct_link' : 'library';
 
-  async function handleHighlight() {
-    if (!toolbar || !contentId) return;
-    try {
-      await createAnnotation({
-        content_id: contentId,
-        type: 'highlight',
-        text: toolbar.text,
-      });
-      toast.success('已高亮');
-      setToolbar(null);
-    } catch {
-      toast.error('保存失败');
-    }
-  }
+    startReadingSession(contentId, source)
+      .then(id => { sessionIdRef.current = id; })
+      .catch(() => {});
 
-  async function handleNote() {
-    if (!showNoteInput) {
-      setShowNoteInput(true);
-      return;
-    }
-    if (!toolbar || !contentId) return;
-    try {
-      await createAnnotation({
-        content_id: contentId,
-        type: 'note',
-        text: toolbar.text,
-        note: noteText,
-      });
-      toast.success('已保存笔记');
-      setToolbar(null);
-      setShowNoteInput(false);
-      setNoteText('');
-    } catch {
-      toast.error('保存失败');
-    }
-  }
+    // 可见性变化 / 离开时结束会话
+    const endSession = () => {
+      if (!sessionIdRef.current) return;
+      const duration = Math.round((Date.now() - sessionStartRef.current) / 1000);
 
-  function scrollToAnchor(anchor?: string) {
-    if (!anchor) return;
-    const el = document.getElementById(anchor);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
+      // 使用 sendBeacon 确保离开时也能发送
+      const url = `/api/reading-sessions/${sessionIdRef.current}/end`;
+      const body = JSON.stringify({ duration_seconds: duration });
 
-  if (loading) {
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }));
+      } else {
+        endReadingSession(sessionIdRef.current, duration).catch(() => {});
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) endSession();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', endSession);
+
+    return () => {
+      endSession();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', endSession);
+    };
+  }, [contentId, token, locParam]);
+
+  // 清理
+  useEffect(() => {
+    return () => {
+      initedRef.current = false;
+      reset();
+    };
+  }, [reset]);
+
+  // 初次加载或无内容时，ReaderContent内部会有处理
+  // 如果要展示一个整页 loading，只在初次还没有 contentMeta 时展示
+  const contentMeta = useReaderStore((state) => state.contentMeta);
+  if (isLoading && !contentMeta) {
     return (
-      <div className="flex items-center justify-center py-32">
-        <p className="text-sm text-gray-400 dark:text-gray-500">加载中...</p>
-      </div>
-    );
-  }
-
-  if (!data) {
-    return (
-      <div className="flex items-center justify-center py-32">
-        <p className="text-sm text-gray-400 dark:text-gray-500">内容未找到</p>
+      <div className="flex items-center justify-center h-[calc(100vh-57px)]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto mb-3" />
+          <p className="text-sm text-gray-400 dark:text-gray-500">加载中...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-57px)]">
-      {/* Sidebar */}
-      {sidebarOpen && outline.length > 0 && (
-        <aside className="w-64 shrink-0 border-r border-gray-200 dark:border-gray-800 p-4 overflow-y-auto hidden md:block">
-          <h2 className="text-xs font-medium tracking-widest uppercase text-gray-400 dark:text-gray-500 mb-4">
-            目录
-          </h2>
-          <nav className="space-y-1">
-            {outline.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => scrollToAnchor(item.anchor)}
-                className="block w-full text-left text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 truncate cursor-pointer py-0.5 transition-colors"
-                style={{ paddingLeft: `${(item.level - 1) * 12}px` }}
-              >
-                {item.title}
-              </button>
-            ))}
-          </nav>
-        </aside>
-      )}
-
-      {/* Main content */}
-      <div className="flex-1 max-w-3xl mx-auto px-6 md:px-12 py-10 relative">
-        {/* Toggle sidebar on mobile */}
-        <button
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="md:hidden mb-4 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 cursor-pointer"
-        >
-          {sidebarOpen ? '隐藏目录' : '显示目录'}
-        </button>
-
-        {/* Title */}
-        <header className="mb-8">
-          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 leading-tight">
-            {data.title}
-          </h1>
-          {data.author && (
-            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">{data.author}</p>
-          )}
-        </header>
-
-        {/* Content */}
-        <div
-          ref={contentRef}
-          onMouseUp={handleMouseUp}
-          className="prose prose-gray dark:prose-invert max-w-none text-base leading-relaxed"
-          dangerouslySetInnerHTML={{ __html: data.body }}
-        />
-
-        {/* Floating toolbar */}
-        {toolbar && (
-          <div
-            className="fixed z-50 flex items-center gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg px-2 py-1.5"
-            style={{
-              top: `${toolbar.top}px`,
-              left: `${toolbar.left}px`,
-              transform: 'translateX(-50%)',
-            }}
-          >
-            <button
-              onClick={handleHighlight}
-              className="px-3 py-1 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer"
-            >
-              高亮
-            </button>
-            <button
-              onClick={handleNote}
-              className="px-3 py-1 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer"
-            >
-              笔记
-            </button>
-            {showNoteInput && (
-              <input
-                value={noteText}
-                onChange={(e) => setNoteText(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleNote(); }}
-                placeholder="写笔记..."
-                autoFocus
-                className="ml-1 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none w-40"
-              />
-            )}
-          </div>
-        )}
-      </div>
-    </div>
+    <ReaderLayout
+      toolbar={<ReaderToolbar />}
+      toc={<ReaderTOC />}
+      outline={<ReaderOutline />}
+      content={<ReaderContent />}
+    />
   );
 }

@@ -303,7 +303,7 @@ class HTMLProcessor:
             if image_data:
                 self.images[filename] = image_data
 
-            img['src'] = f"/api/media/{self.content_id}/{filename}"
+            img['src'] = f"/media/{self.content_id}/{filename}"
 
     def _rewrite_toc_links(self, soup: BeautifulSoup) -> None:
         for a in soup.find_all('a'):

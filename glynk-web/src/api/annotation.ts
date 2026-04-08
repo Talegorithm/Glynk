@@ -1,9 +1,9 @@
 import client from './client';
-import type { Annotation, QueryResponse } from '../types/annotation';
+import type { Annotation } from '../types/annotation';
 
 export async function createAnnotation(data: {
   content_id: string;
-  anchor: { type: string; spans: string[] };
+  anchor: Record<string, unknown>;
   type: string;
   text: string;
   tags?: string[];
@@ -17,7 +17,7 @@ export async function createAnnotation(data: {
 export async function createBatchAnnotations(
   annotations: Array<{
     content_id: string;
-    anchor: { type: string; spans: string[] };
+    anchor: Record<string, unknown>;
     type: string;
     text: string;
     tags?: string[];
@@ -34,6 +34,25 @@ export async function getMyAnnotations(params?: {
   offset?: number;
 }): Promise<{ annotations: Annotation[]; total: number }> {
   const res = await client.get<{ annotations: Annotation[]; total: number }>('/annotations', { params });
+  return res.data;
+}
+
+export async function getContentAnnotations(contentId: string): Promise<Annotation[]> {
+  const res = await client.get<{ annotations: Annotation[]; total: number }>('/annotations', {
+    params: { content_id: contentId, limit: 200 },
+  });
+  return res.data.annotations;
+}
+
+export async function deleteAnnotation(annotationId: string): Promise<void> {
+  await client.delete(`/annotations/${annotationId}`);
+}
+
+export async function updateAnnotation(
+  annotationId: string,
+  data: { text?: string; anchor?: Record<string, unknown> },
+): Promise<Annotation> {
+  const res = await client.patch<Annotation>(`/annotations/${annotationId}`, data);
   return res.data;
 }
 

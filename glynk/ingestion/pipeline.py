@@ -11,8 +11,10 @@ from urllib.parse import urlparse
 from typing import Union
 import logging
 
+from bs4 import BeautifulSoup
+
 from glynk.config import AppConfig
-from glynk.models import Content, IngestResult, ParsedContent
+from glynk.models import Content, IngestResult, ParsedContent, TOCItem
 from glynk.ingestion.registry import HandlerRegistry
 from glynk.ingestion.processing.html_processor import HTMLProcessor
 
@@ -83,8 +85,10 @@ class IngestionPipeline:
 
             total_chars += result.sentence_count * 50  # 估算
 
-        # 5. 保存 TOC
+        # 5. 保存 TOC — 将 EPUB href 映射为 span_id
         toc_list = [item.to_dict() for item in parsed.toc] if parsed.toc else []
+        if toc_list and parsed.file_names:
+            self._map_toc_to_span_ids(toc_list, parsed.file_names, content_id, html_root)
 
         # 6. 保存到数据库
         content = Content(
@@ -125,6 +129,96 @@ class IngestionPipeline:
             tmp.close()
             return Path(tmp.name)
         return Path(source)
+
+    def _map_toc_to_span_ids(self, toc_list: list[dict], file_names: list[str],
+                                content_id: str, html_root: Path):
+        """
+        将 TOC 中的 EPUB href 映射为 span_id（参照 Resonote _map_toc_to_span_ids）。
+
+        file_names: EPUB 原始文件名列表，与 0.html, 1.html... 一一对应
+        """
+        # 建立映射：原始文件名 → file_idx
+        name_to_idx = {}
+        for idx, name in enumerate(file_names):
+            name_to_idx[name] = idx
+            # 也支持不带路径前缀的匹配
+            base = name.split('/')[-1]
+            name_to_idx[base] = idx
+
+        # 建立映射：file_idx → 首个 span_id
+        file_first_span = {}
+        for idx in range(len(file_names)):
+            html_file = html_root / f"{idx}.html"
+            if not html_file.exists():
+                continue
+            html = html_file.read_text(encoding='utf-8')
+            soup = BeautifulSoup(html, 'html.parser')
+            first = soup.find('span', id=True)
+            if first:
+                file_first_span[idx] = first.get('id')
+
+        def resolve_href(href: str) -> str:
+            """将 EPUB href 解析为 span_id"""
+            if not href:
+                return ""
+
+            # 分离文件名和锚点
+            parts = href.split('#', 1)
+            file_ref = parts[0]
+            anchor = parts[1] if len(parts) > 1 else None
+
+            # 查找 file_idx
+            file_idx = None
+            base_ref = file_ref.split('/')[-1]
+            if file_ref in name_to_idx:
+                file_idx = name_to_idx[file_ref]
+            elif base_ref in name_to_idx:
+                file_idx = name_to_idx[base_ref]
+
+            if file_idx is None:
+                return ""
+
+            # 如果有锚点，尝试在 HTML 中找到对应元素的 span_id
+            if anchor:
+                html_file = html_root / f"{file_idx}.html"
+                if html_file.exists():
+                    html = html_file.read_text(encoding='utf-8')
+                    soup = BeautifulSoup(html, 'html.parser')
+                    target = soup.find(id=anchor)
+                    if target:
+                        # 找这个元素内或之后的第一个 span[id]
+                        span = target.find('span', id=True) if target.name != 'span' else target
+                        if not span and target.get('id'):
+                            span = target.find_next('span', id=True)
+                        if span and span.get('id'):
+                            return span.get('id')
+
+            # fallback: 返回该文件的首个 span_id
+            return file_first_span.get(file_idx, "")
+
+        def process_toc_items(items: list[dict], depth: int = 1):
+            for item in items:
+                item['level'] = depth
+                item['href'] = resolve_href(item.get('href', ''))
+                # 如果 href 为空，尝试 fallback 到第一个子项
+                if not item['href'] and item.get('children'):
+                    for child in item['children']:
+                        child_href = resolve_href(child.get('href', ''))
+                        if child_href:
+                            item['href'] = child_href
+                            break
+                if item.get('children'):
+                    process_toc_items(item['children'], depth + 1)
+
+        process_toc_items(toc_list)
+        stats = {'mapped': 0, 'failed': 0}
+        def count(items):
+            for i in items:
+                if i.get('href'): stats['mapped'] += 1
+                else: stats['failed'] += 1
+                if i.get('children'): count(i['children'])
+        count(toc_list)
+        logger.info(f"TOC mapping: {stats['mapped']} mapped, {stats['failed']} failed")
 
     def _calculate_file_hash(self, file_path: Path) -> str:
         sha256 = hashlib.sha256()
