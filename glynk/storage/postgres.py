@@ -143,21 +143,9 @@ CREATE TABLE IF NOT EXISTS translations (
 );
 """
 
-# Vector index creation (separate since it's slow on large tables)
-# pgvector HNSW限制2000维，3072维用IVFFlat；规模大了切Milvus
-VECTOR_INDEX_SQL = """
-DO $$
-BEGIN
-    -- IVFFlat needs data to build; skip on empty table, create later via ensure_vector_index()
-    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_ann_embedding') THEN
-        IF EXISTS (SELECT 1 FROM annotations WHERE embedding IS NOT NULL LIMIT 1) THEN
-            CREATE INDEX idx_ann_embedding ON annotations
-                USING ivfflat (embedding vector_cosine_ops)
-                WITH (lists = 100);
-        END IF;
-    END IF;
-END $$;
-"""
+# Vector index: pgvector IVFFlat/HNSW both cap at 2000 dims, 3072 dims uses brute-force scan.
+# At 110K rows this is fine (~50ms). For 1M+ rows, consider dimensionality reduction or Milvus.
+VECTOR_INDEX_SQL = ""
 
 
 class PostgresStore:
@@ -189,7 +177,6 @@ class PostgresStore:
         try:
             with conn.cursor() as cur:
                 cur.execute(INIT_SQL)
-                cur.execute(VECTOR_INDEX_SQL)
             conn.commit()
             logger.info("Database tables initialized")
         except Exception as e:
