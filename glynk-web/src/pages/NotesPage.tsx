@@ -70,7 +70,9 @@ export default function NotesPage() {
     <div className="max-w-3xl mx-auto px-6 py-10">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Notes</h1>
-        <span className="text-sm text-gray-400 dark:text-gray-500">{total} 条</span>
+        <span className="text-sm text-gray-400 dark:text-gray-500">
+          {annotations.length < total ? `最新 ${annotations.length} / ${total} 条` : `${total} 条`}
+        </span>
       </div>
 
       <form onSubmit={handleSearch} className="mb-6">

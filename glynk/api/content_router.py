@@ -200,7 +200,8 @@ async def list_contents(
     """内容列表"""
     db = PostgresStore.get_instance()
     contents = db.list_contents(limit=limit, offset=offset)
-    return {"contents": contents}
+    total = db.count_contents()
+    return {"contents": contents, "total": total}
 
 
 # --- Reading Progress ---

@@ -250,6 +250,10 @@ class PostgresStore:
             (limit, offset), fetch='all'
         ) or []
 
+    def count_contents(self) -> int:
+        result = self._execute("SELECT count(*) FROM contents WHERE status = 'ready'", fetch='one')
+        return result['count'] if result else 0
+
     def update_content_outline(self, content_id: str, outline_json: str) -> bool:
         self._execute(
             "UPDATE contents SET ai_outline_json = %s, updated_at = CURRENT_TIMESTAMP WHERE content_id = %s",

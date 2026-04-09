@@ -35,8 +35,8 @@ export async function getOutline(contentId: string): Promise<OutlineItem[]> {
   return res.data.outline;
 }
 
-export async function listContents(limit = 20, offset = 0): Promise<{ contents: Content[] }> {
-  const res = await client.get<{ contents: Content[] }>('/contents', { params: { limit, offset } });
+export async function listContents(limit = 20, offset = 0): Promise<{ contents: Content[]; total: number }> {
+  const res = await client.get<{ contents: Content[]; total: number }>('/contents', { params: { limit, offset } });
   return res.data;
 }
 

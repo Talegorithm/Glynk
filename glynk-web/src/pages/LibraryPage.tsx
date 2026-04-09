@@ -15,13 +15,14 @@ const sourceIcons: Record<string, string> = {
 
 export default function LibraryPage() {
   const [contents, setContents] = useState<Content[]>([]);
+  const [total, setTotal] = useState(0);
   const [searchResults, setSearchResults] = useState<SemanticSearchResult[] | null>(null);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     listContents(50, 0)
-      .then((res) => setContents(res.contents))
+      .then((res) => { setContents(res.contents); setTotal(res.total); })
       .catch(() => toast.error('加载失败'))
       .finally(() => setLoading(false));
   }, []);
@@ -48,6 +49,11 @@ export default function LibraryPage() {
     <div className="max-w-5xl mx-auto px-6 py-10">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Library</h1>
+        {total > 0 && (
+          <span className="text-sm text-gray-400 dark:text-gray-500">
+            {contents.length < total ? `最新 ${contents.length} / ${total} 条` : `${total} 条`}
+          </span>
+        )}
       </div>
 
       {/* Search */}
