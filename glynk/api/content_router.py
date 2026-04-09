@@ -19,7 +19,9 @@ from typing import Optional, Annotated
 
 from glynk.api.auth import get_current_user, get_optional_user
 from glynk.content.reader import ReaderService
+from glynk.content.translation import translate_file_on_disk
 from glynk.storage.postgres import PostgresStore
+from glynk.config import AppConfig
 
 router = APIRouter(tags=["content"])
 
@@ -113,6 +115,24 @@ async def read_file(
         }
     except ValueError as e:
         raise HTTPException(404, str(e))
+
+
+class TranslateRequest(BaseModel):
+    file_idx: int
+
+
+@router.post("/content/{content_id}/translate")
+async def translate_file(content_id: str, req: TranslateRequest,
+                         user: dict = Depends(get_current_user)):
+    """翻译指定文件，自动检测语言方向，返回目标语言代码"""
+    config = AppConfig.from_env()
+    try:
+        lang_code = translate_file_on_disk(config.storage.html_root, content_id, req.file_idx)
+        return {"lang": lang_code, "status": "done"}
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e))
+    except Exception as e:
+        raise HTTPException(500, f"Translation failed: {e}")
 
 
 @router.get("/content/{content_id}/chunk")

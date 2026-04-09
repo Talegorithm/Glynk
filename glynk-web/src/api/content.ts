@@ -55,6 +55,13 @@ export async function saveReadingProgress(contentId: string, spanId: string): Pr
   await client.put(`/content/${contentId}/progress`, { span_id: spanId });
 }
 
+// --- 翻译 ---
+
+export async function translateFile(contentId: string, fileIdx: number): Promise<{ lang: string; status: string }> {
+  const res = await client.post<{ lang: string; status: string }>(`/content/${contentId}/translate`, { file_idx: fileIdx });
+  return res.data;
+}
+
 // --- 阅读会话 ---
 
 export async function startReadingSession(

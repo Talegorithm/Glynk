@@ -19,6 +19,7 @@ interface ReaderState {
   isLoading: boolean;
   isJumping: boolean;
   tocVisible: boolean;
+  lang: string | null;
 
   init: (contentId: string) => Promise<void>;
   loadFile: (fileIdx: number, fromSpan?: string) => Promise<void>;
@@ -27,6 +28,7 @@ interface ReaderState {
   jumpToLocation: (spanId: string) => Promise<void>;
   reloadCurrentFile: (location?: string) => Promise<void>;
   getCurrentLocation: () => string;
+  setLang: (lang: string | null) => void;
   toggleToc: () => void;
   reset: () => void;
 }
@@ -60,6 +62,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
   isLoading: false,
   isJumping: false,
   tocVisible: false,
+  lang: null,
 
   /**
    * 初始化阅读器：加载元数据 + 首文件 + TOC + outline
@@ -71,7 +74,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
       // 并行加载元数据和首文件
       const [detail, firstFile] = await Promise.all([
         getContentDetail(contentId),
-        readFile(contentId),
+        readFile(contentId, undefined, get().lang || undefined),
       ]);
 
       const meta: ContentMeta = {
@@ -136,7 +139,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
     try {
       // 构造 from span: 如果没有提供，用 content_id-fileIdx-p0-s0 格式
       const from = fromSpan || `${state.contentId}-${fileIdx}-p0-s0`;
-      const response = await readFile(state.contentId, from);
+      const response = await readFile(state.contentId, from, state.lang || undefined);
 
       const actualFileIdx = response.from ? parseFileIdx(response.from) : fileIdx;
       const fileContent: FileContent = {
@@ -190,7 +193,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
 
         if (!lastFile?.hasMore || !lastFile?.nextFrom) break;
 
-        const response = await readFile(contentId, lastFile.nextFrom);
+        const response = await readFile(contentId, lastFile.nextFrom, get().lang || undefined);
         const actualFileIdx = response.from ? parseFileIdx(response.from) : lastFile.fileIdx + 1;
         
         // Each chunk becomes its own FileContent entry in the map.
@@ -250,7 +253,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
     try {
       const fileIdx = parseFileIdx(spanId);
       const from = `${state.contentId}-${fileIdx}-p0-s0`;
-      const response = await readFile(state.contentId, from);
+      const response = await readFile(state.contentId, from, state.lang || undefined);
 
       const fileContent: FileContent = {
         fileIdx,
@@ -386,6 +389,10 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
     return spans[0]?.id || '';
   },
 
+  setLang: (lang) => {
+    set({ lang });
+  },
+
   toggleToc: () => {
     set((state) => ({ tocVisible: !state.tocVisible }));
   },
@@ -402,6 +409,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
       isLoading: false,
       isJumping: false,
       tocVisible: false,
+      lang: null,
     });
   },
 }));
