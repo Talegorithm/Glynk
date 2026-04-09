@@ -87,6 +87,9 @@ def extract_basic_metadata(html_content: str) -> dict:
 def download_url(url: str) -> bytes:
     """下载 URL 内容"""
     import httpx
-    response = httpx.get(url, timeout=30, follow_redirects=True)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    }
+    response = httpx.get(url, timeout=30, follow_redirects=True, headers=headers)
     response.raise_for_status()
     return response.content
