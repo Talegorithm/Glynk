@@ -276,33 +276,24 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
       });
 
       // 等待 DOM 渲染，然后定位
-      await new Promise(resolve => setTimeout(resolve, 100));
       set({ isJumping: true });
 
       // 轮询等待目标元素渲染完成
       const startTime = Date.now();
-      const maxWaitTime = 3000;
+      const maxWaitTime = 5000;
 
       const checkAndScroll = () => {
         const elapsed = Date.now() - startTime;
-        const scrollContainer = document.querySelector('[data-reader-scroll]');
-        if (!scrollContainer) {
-          if (elapsed < maxWaitTime) setTimeout(checkAndScroll, 50);
-          return;
-        }
 
         const targetSpan = document.getElementById(spanId);
         if (!targetSpan) {
-          if (elapsed < maxWaitTime) setTimeout(checkAndScroll, 50);
+          if (elapsed < maxWaitTime) setTimeout(checkAndScroll, 100);
+          else set({ isJumping: false });
           return;
         }
 
-        // 滚动到目标位置
-        const containerRect = scrollContainer.getBoundingClientRect();
-        const elementRect = targetSpan.getBoundingClientRect();
-        const scrollTop = scrollContainer.scrollTop + (elementRect.top - containerRect.top) - 100;
-
-        scrollContainer.scrollTo({ top: scrollTop, behavior: 'smooth' });
+        // scrollIntoView 比手动计算更可靠（不受图片加载影响）
+        targetSpan.scrollIntoView({ block: 'center', behavior: 'smooth' });
 
         // 脉冲高亮效果
         const originalOutline = targetSpan.style.outline || '';
@@ -328,7 +319,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
         }, 500);
       };
 
-      setTimeout(checkAndScroll, 300);
+      setTimeout(checkAndScroll, 200);
     } catch (error) {
       console.error('跳转失败:', error);
       set({ isLoading: false, isJumping: false });
