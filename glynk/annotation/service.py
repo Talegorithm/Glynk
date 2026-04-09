@@ -5,7 +5,7 @@ AnnotationService - 标注的 CRUD + 向量索引
 """
 from uuid import uuid4
 
-from glynk.models import Annotation
+from glynk.models import Annotation, expand_span_id
 from glynk.config import EmbeddingConfig
 from glynk.embedding.service import generate_embedding, generate_embeddings
 from glynk.annotation.vector_store import VectorStore
@@ -22,9 +22,24 @@ class AnnotationService:
         self.vector_store = vector_store
         self.embedding_config = embedding_config
 
+    @staticmethod
+    def _expand_anchor_spans(ann: Annotation):
+        """补全 anchor.spans 中的短 span ID（AI view 产出的 0-p6-s2 → content_id-0-p6-s2）"""
+        anchor = ann.anchor
+        if not anchor or not ann.content_id:
+            return
+        spans = anchor.get('spans', [])
+        if spans:
+            anchor['spans'] = [expand_span_id(s, ann.content_id) for s in spans]
+        # Also expand startSpanId / endSpanId if present
+        for key in ('startSpanId', 'endSpanId'):
+            if key in anchor:
+                anchor[key] = expand_span_id(anchor[key], ann.content_id)
+
     async def create(self, annotation: Annotation) -> Annotation:
         if not annotation.id:
             annotation.id = f"ann-{uuid4().hex[:12]}"
+        self._expand_anchor_spans(annotation)
 
         vector = None
         if annotation.type in self.EMBEDDING_TYPES:
@@ -37,6 +52,7 @@ class AnnotationService:
         for ann in annotations:
             if not ann.id:
                 ann.id = f"ann-{uuid4().hex[:12]}"
+            self._expand_anchor_spans(ann)
 
         need_embedding = [a for a in annotations if a.type in self.EMBEDDING_TYPES]
         no_embedding = [a for a in annotations if a.type not in self.EMBEDDING_TYPES]

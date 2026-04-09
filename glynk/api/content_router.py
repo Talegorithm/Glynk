@@ -22,6 +22,7 @@ from glynk.content.reader import ReaderService
 from glynk.content.translation import translate_file_on_disk
 from glynk.storage.postgres import PostgresStore
 from glynk.config import AppConfig
+from glynk.models import expand_span_id
 
 router = APIRouter(tags=["content"])
 
@@ -90,6 +91,8 @@ async def read_file(
         raise HTTPException(500, "Reader not initialized")
 
     from_span = request.query_params.get("from")
+    if from_span:
+        from_span = expand_span_id(from_span, content_id)
     # optionally support explicit file_idx
     file_idx_str = request.query_params.get("file_idx")
     file_idx = int(file_idx_str) if file_idx_str and file_idx_str.isdigit() else None
@@ -154,6 +157,8 @@ async def read_chunk(
         raise HTTPException(500, "Reader not initialized")
 
     from_span = request.query_params.get("from")
+    if from_span:
+        from_span = expand_span_id(from_span, content_id)
     uid = user["uid"] if user else None
 
     try:

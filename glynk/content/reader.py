@@ -120,7 +120,7 @@ class ReaderService:
                                 char_count=0, has_more=False)
 
         located = self.locator.get_content_from_location(content_id, start, size)
-        html = to_ai_view(located.html)  # AI filter
+        html = to_ai_view(located.html, content_id=content_id)  # AI filter
         
         has_more = located.has_more
         next_from = self._get_next_span(content_id, located.end_location) if has_more else None

@@ -185,6 +185,25 @@ def parse_span_id(span_id: str) -> dict:
     }
 
 
+def expand_span_id(span_id: str, content_id: str) -> str:
+    """
+    如果 span_id 缺少 content_id 前缀，补全。
+
+    完整格式: c64b37d42dcc9025-0-p6-s2 (4 parts)
+    短格式:   0-p6-s2 (3 parts, 来自 AI view)
+    """
+    if not span_id or not content_id:
+        return span_id
+    # 已经是完整格式
+    if span_id.startswith(content_id):
+        return span_id
+    # 短格式：file_idx-pN-sM
+    parts = span_id.split('-')
+    if len(parts) == 3 and parts[1].startswith('p') and parts[2].startswith('s'):
+        return f"{content_id}-{span_id}"
+    return span_id
+
+
 def parse_file_idx_from_span(span_id: str) -> int:
     """从 span_id 提取 file_idx"""
     if not span_id:
