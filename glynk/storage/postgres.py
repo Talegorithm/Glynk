@@ -238,6 +238,13 @@ class PostgresStore:
             (content_id,), fetch='one'
         )
 
+    def get_content_by_source_url(self, normalized_url: str) -> Optional[dict]:
+        """按归一化 URL 前缀匹配查找内容（去掉 tracking 参数后的 URL）"""
+        return self._execute(
+            "SELECT * FROM contents WHERE source_url LIKE %s AND status = 'ready' LIMIT 1",
+            (normalized_url + '%',), fetch='one'
+        )
+
     def list_contents(self, limit: int = 100, offset: int = 0) -> list[dict]:
         return self._execute(
             "SELECT * FROM contents WHERE status = 'ready' ORDER BY created_at DESC LIMIT %s OFFSET %s",

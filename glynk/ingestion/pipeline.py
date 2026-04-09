@@ -35,6 +35,23 @@ class IngestionPipeline:
         self.config = config
         self.db = db
 
+    @staticmethod
+    def _normalize_url(url: str) -> str:
+        """归一化 URL：去掉 fragment、tracking 参数、排序剩余参数"""
+        from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+        parsed = urlparse(url)
+        params = parse_qs(parsed.query, keep_blank_values=False)
+        # 去掉常见 tracking 参数
+        tracking_keys = {
+            'mpshare', 'scene', 'srcid', 'sharer_shareinfo',
+            'sharer_shareinfo_first', 'share_token', 'from', 'isappinstalled',
+            'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term',
+            'fbclid', 'gclid', 'ref', 'source',
+        }
+        cleaned = {k: v for k, v in params.items() if k.lower() not in tracking_keys}
+        sorted_query = urlencode(cleaned, doseq=True)
+        return urlunparse((parsed.scheme, parsed.netloc, parsed.path, '', sorted_query, ''))
+
     async def ingest(self, source: Union[str, Path], uid: str = None,
                      content_type: str = None,
                      source_hint: str = "") -> IngestResult:
@@ -47,12 +64,21 @@ class IngestionPipeline:
             content_type: 明确指定内容类型
             source_hint: 来源提示（如 'arxiv.org'）
         """
-        # 1. 获取文件
-        file_path = await self._resolve_source(source)
-        if not source_hint and isinstance(source, str) and source.startswith('http'):
-            source_hint = urlparse(source).netloc
+        # 1. URL 去重（在下载前检查）
+        source_url = None
+        if isinstance(source, str) and source.startswith('http'):
+            source_url = source
+            normalized = self._normalize_url(source)
+            existing_by_url = self.db.get_content_by_source_url(normalized)
+            if existing_by_url:
+                raise ContentAlreadyExistsError(existing_by_url)
 
-        # 2. 计算 content_id + 去重检查
+        # 2. 获取文件
+        file_path = await self._resolve_source(source)
+        if not source_hint and source_url:
+            source_hint = urlparse(source_url).netloc
+
+        # 3. 计算 content_id + file hash 去重
         file_hash = self._calculate_file_hash(file_path)
         content_id = file_hash[:16]
         existing = self.db.get_content(content_id)
