@@ -2,8 +2,8 @@ import { useAuthStore } from '../store/auth';
 
 const zh: Record<string, string> = {
   // Layout
-  'nav.library': 'Library',
-  'nav.notes': 'Notes',
+  'nav.library': '书架',
+  'nav.notes': '笔记',
   'nav.logout': '退出',
   'nav.login': '登录',
   'nav.register': '注册',
@@ -60,7 +60,7 @@ const zh: Record<string, string> = {
   'register.success.enter': '进入 Glynk',
 
   // Library
-  'library.title': 'Library',
+  'library.title': '书架',
   'library.search_placeholder': '语义搜索...',
   'library.loading': '加载中...',
   'library.no_results': '无结果',
@@ -71,7 +71,7 @@ const zh: Record<string, string> = {
   'library.count_partial': '最新 {shown} / {total} 条',
 
   // Notes
-  'notes.title': 'Notes',
+  'notes.title': '笔记',
   'notes.tab.all': '全部',
   'notes.tab.highlight': '高亮',
   'notes.tab.hook': 'Hook',
