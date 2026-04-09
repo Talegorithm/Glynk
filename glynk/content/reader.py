@@ -65,9 +65,15 @@ class ReaderService:
                 content_id, file_idx
             )
 
-        next_file = self.html_root / content_id / f"{file_idx + 1}.html"
-        has_more = next_file.exists()
-        next_from = self._get_first_span(content_id, file_idx + 1) if has_more else None
+        # 找下一个有 span 的文件
+        next_idx = file_idx + 1
+        next_from = None
+        while (self.html_root / content_id / f"{next_idx}.html").exists():
+            next_from = self._get_first_span(content_id, next_idx)
+            if next_from:
+                break
+            next_idx += 1
+        has_more = next_from is not None
 
         # 翻译
         translation_status = "original"

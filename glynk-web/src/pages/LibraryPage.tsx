@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { listContents } from '../api/content';
 import { semanticSearch } from '../api/search';
@@ -14,11 +14,13 @@ const sourceIcons: Record<string, string> = {
 };
 
 export default function LibraryPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [contents, setContents] = useState<Content[]>([]);
   const [total, setTotal] = useState(0);
   const [searchResults, setSearchResults] = useState<SemanticSearchResult[] | null>(null);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(searchParams.get('q') || '');
   const [loading, setLoading] = useState(true);
+  const initialSearchDone = useRef(false);
 
   useEffect(() => {
     listContents(50, 0)
@@ -27,14 +29,30 @@ export default function LibraryPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Restore search from URL on mount
+  useEffect(() => {
+    if (initialSearchDone.current) return;
+    const q = searchParams.get('q');
+    if (q) {
+      initialSearchDone.current = true;
+      setLoading(true);
+      semanticSearch({ text: q, top_k: 20 })
+        .then((res) => setSearchResults(res.results))
+        .catch(() => toast.error('搜索失败'))
+        .finally(() => setLoading(false));
+    }
+  }, [searchParams]);
+
   const handleSearch = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     const q = query.trim();
     if (!q) {
       setSearchResults(null);
+      setSearchParams({});
       return;
     }
     setLoading(true);
+    setSearchParams({ q });
     try {
       const res = await semanticSearch({ text: q, top_k: 20 });
       setSearchResults(res.results);
@@ -43,13 +61,13 @@ export default function LibraryPage() {
     } finally {
       setLoading(false);
     }
-  }, [query]);
+  }, [query, setSearchParams]);
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-10">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Library</h1>
-        {total > 0 && (
+        {total > 0 && !searchResults && (
           <span className="text-sm text-gray-400 dark:text-gray-500">
             {contents.length < total ? `最新 ${contents.length} / ${total} 条` : `${total} 条`}
           </span>
@@ -63,7 +81,10 @@ export default function LibraryPage() {
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
-            if (!e.target.value.trim()) setSearchResults(null);
+            if (!e.target.value.trim()) {
+              setSearchResults(null);
+              setSearchParams({});
+            }
           }}
           placeholder="语义搜索..."
           className="glynk-input"
