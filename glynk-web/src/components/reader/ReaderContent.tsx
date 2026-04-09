@@ -161,10 +161,10 @@ export function ReaderContent({ requestLogin }: ReaderContentProps) {
   } | null>(null);
   const [editingAnnotation, setEditingAnnotation] = useState<Annotation | null>(null);
 
-  // 阅读进度保存（debounce）
+  // 阅读进度保存（debounce，需要登录）
   const progressTimerRef = useRef<number | null>(null);
   const saveProgress = useCallback(() => {
-    if (!contentId) return;
+    if (!contentId || !token) return;
     if (progressTimerRef.current) clearTimeout(progressTimerRef.current);
     progressTimerRef.current = window.setTimeout(() => {
       const location = useReaderStore.getState().getCurrentLocation();
@@ -268,14 +268,14 @@ export function ReaderContent({ requestLogin }: ReaderContentProps) {
     return () => document.removeEventListener('contextmenu', handleContextMenu, { capture: true });
   }, []);
 
-  // 加载已保存的 annotations
+  // 加载已保存的 annotations（需要登录）
   useEffect(() => {
-    if (!contentId) return;
+    if (!contentId || !token) return;
 
     getContentAnnotations(contentId)
       .then(setAnnotations)
       .catch(console.error);
-  }, [contentId, loadedFiles.size]);
+  }, [contentId, token, loadedFiles.size]);
 
   // 应用高亮样式到 DOM
   useEffect(() => {
