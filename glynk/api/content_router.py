@@ -250,9 +250,9 @@ async def start_session(req: SessionStartRequest,
     return {"session_id": session_id}
 
 
-@router.put("/reading-sessions/{session_id}/end")
+@router.api_route("/reading-sessions/{session_id}/end", methods=["PUT", "POST"])
 async def end_session(session_id: str, req: SessionEndRequest,
-                      user: dict = Depends(get_current_user)):
+                      user: dict = Depends(get_optional_user)):
     """结束阅读会话"""
     db = PostgresStore.get_instance()
     db.end_reading_session(session_id, req.duration_seconds)
