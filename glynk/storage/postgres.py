@@ -104,6 +104,7 @@ CREATE TABLE IF NOT EXISTS users (
     token TEXT UNIQUE NOT NULL,
     email TEXT UNIQUE NOT NULL,
     name TEXT DEFAULT '',
+    preferred_lang TEXT DEFAULT 'zh',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

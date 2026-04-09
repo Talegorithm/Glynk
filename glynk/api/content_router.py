@@ -122,13 +122,19 @@ class TranslateRequest(BaseModel):
 
 
 @router.post("/content/{content_id}/translate")
-async def translate_file(content_id: str, req: TranslateRequest,
-                         user: dict = Depends(get_current_user)):
-    """翻译指定文件，自动检测语言方向，返回目标语言代码"""
+async def translate_file_endpoint(content_id: str, req: TranslateRequest,
+                                  user: dict = Depends(get_current_user)):
+    """翻译指定文件，目标语言取用户偏好"""
     config = AppConfig.from_env()
+    db = PostgresStore.get_instance()
+    # 读取用户偏好语言
+    user_row = db.get_user_by_uid(user["uid"])
+    target_lang = user_row.get("preferred_lang") if user_row else None
     try:
-        lang_code = translate_file_on_disk(config.storage.html_root, content_id, req.file_idx)
-        return {"lang": lang_code, "status": "done"}
+        lang_code, status = translate_file_on_disk(
+            config.storage.html_root, content_id, req.file_idx, target_lang
+        )
+        return {"lang": lang_code, "status": status}
     except FileNotFoundError as e:
         raise HTTPException(404, str(e))
     except Exception as e:

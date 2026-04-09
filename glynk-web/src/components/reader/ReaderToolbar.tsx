@@ -6,6 +6,7 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useReaderStore } from '../../store/reader';
 import { translateFile } from '../../api/content';
 import { ReaderSettingsMenu } from './ReaderSettingsMenu';
@@ -41,6 +42,10 @@ export function ReaderToolbar() {
       } else {
         // Trigger translation, then switch to translated
         const res = await translateFile(contentId, currentFileIdx);
+        if (res.status === 'same_language') {
+          toast.info('内容已是您的偏好语言');
+          return;
+        }
         setLang(res.lang);
         await reloadCurrentFile?.(currentLocation || undefined);
       }

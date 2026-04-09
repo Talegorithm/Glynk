@@ -56,5 +56,23 @@ async def get_me(user: dict = Depends(get_current_user)):
     return {
         "uid": user["uid"],
         "email": user.get("email", ""),
+        "preferred_lang": user.get("preferred_lang", "zh"),
         "created_at": user.get("created_at"),
     }
+
+
+class UpdatePreferencesRequest(BaseModel):
+    preferred_lang: str | None = None
+
+
+@router.patch("/me/preferences")
+async def update_preferences(req: UpdatePreferencesRequest,
+                             user: dict = Depends(get_current_user)):
+    """更新用户偏好"""
+    db = PostgresStore.get_instance()
+    if req.preferred_lang:
+        db._execute(
+            "UPDATE users SET preferred_lang = %s WHERE uid = %s",
+            (req.preferred_lang, user["uid"]),
+        )
+    return {"ok": True}

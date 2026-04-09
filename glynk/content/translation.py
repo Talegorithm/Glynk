@@ -39,19 +39,15 @@ def _get_client() -> OpenAI:
     )
 
 
-def _detect_language(text: str) -> str:
+LANG_NAMES = {"zh": "中文", "en": "English", "ja": "日本語"}
+
+
+def detect_language(text: str) -> str:
     """简单检测：中文字符超过 30% 视为中文"""
     if not text:
         return "en"
     chinese = sum(1 for c in text if '\u4e00' <= c <= '\u9fff')
     return "zh" if chinese / max(len(text), 1) > 0.3 else "en"
-
-
-def _target_lang(source: str) -> tuple[str, str]:
-    """返回 (language_code, language_name)"""
-    if source == "zh":
-        return "en", "English"
-    return "zh", "中文"
 
 
 def _translate_html_chunk(client: OpenAI, html_chunk: str, target_lang_name: str) -> str:
@@ -111,25 +107,37 @@ def _split_by_paragraphs(html: str, max_chars: int) -> list[str]:
     return chunks
 
 
-def translate_file_on_disk(html_root: Path, content_id: str, file_idx: int) -> str:
+def translate_file_on_disk(html_root: Path, content_id: str, file_idx: int,
+                          target_lang: str = None) -> tuple[str, str]:
     """
     翻译文件并保存到磁盘。已有翻译直接返回。
 
     流程：原文 HTML → AI view → 整块翻译 → 提取 span 文本映射 → 回插到原 HTML
 
-    Returns: 目标语言代码
+    Returns: (target_lang_code, status) where status is "done" | "same_language"
     """
     source_path = html_root / content_id / f"{file_idx}.html"
     if not source_path.exists():
         raise FileNotFoundError(f"Source file not found: {source_path}")
 
     original_html = source_path.read_text(encoding="utf-8")
-    source_lang = _detect_language(BeautifulSoup(original_html, 'html.parser').get_text()[:500])
-    lang_code, lang_name = _target_lang(source_lang)
+    source_lang = detect_language(BeautifulSoup(original_html, 'html.parser').get_text()[:500])
+
+    # 确定目标语言
+    if target_lang:
+        lang_code = target_lang
+    else:
+        lang_code = "en" if source_lang == "zh" else "zh"
+
+    # 原文语言 == 目标语言
+    if source_lang == lang_code:
+        return lang_code, "same_language"
+
+    lang_name = LANG_NAMES.get(lang_code, lang_code)
 
     target_path = html_root / content_id / f"{file_idx}.{lang_code}.html"
     if target_path.exists():
-        return lang_code
+        return lang_code, "done"
 
     logger.info(f"Translating {content_id}/{file_idx}.html → {lang_code}")
 
@@ -165,4 +173,4 @@ def translate_file_on_disk(html_root: Path, content_id: str, file_idx: int) -> s
     # Step 5: 保存
     target_path.write_text(str(original_soup), encoding="utf-8")
     logger.info(f"Saved translation: {target_path}")
-    return lang_code
+    return lang_code, "done"
