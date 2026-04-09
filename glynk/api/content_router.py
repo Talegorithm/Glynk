@@ -71,6 +71,7 @@ async def get_content_detail(content_id: str):
         "file_count": content.get("file_count", 0),
         "total_chars": content.get("total_chars", 0),
         "abstract": content.get("abstract", ""),
+        "language": content.get("language"),
         "toc": toc,
         "outline": outline,
         "created_at": content.get("created_at"),
@@ -132,7 +133,7 @@ async def translate_file_endpoint(content_id: str, req: TranslateRequest,
     target_lang = user_row.get("preferred_lang") if user_row else None
     try:
         lang_code, status = translate_file_on_disk(
-            config.storage.html_root, content_id, req.file_idx, target_lang
+            config.storage.html_root, content_id, req.file_idx, target_lang, db
         )
         return {"lang": lang_code, "status": status}
     except FileNotFoundError as e:

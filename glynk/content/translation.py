@@ -108,7 +108,7 @@ def _split_by_paragraphs(html: str, max_chars: int) -> list[str]:
 
 
 def translate_file_on_disk(html_root: Path, content_id: str, file_idx: int,
-                          target_lang: str = None) -> tuple[str, str]:
+                          target_lang: str = None, db=None) -> tuple[str, str]:
     """
     翻译文件并保存到磁盘。已有翻译直接返回。
 
@@ -122,6 +122,16 @@ def translate_file_on_disk(html_root: Path, content_id: str, file_idx: int,
 
     original_html = source_path.read_text(encoding="utf-8")
     source_lang = detect_language(BeautifulSoup(original_html, 'html.parser').get_text()[:500])
+
+    # 回写 language 到 contents 表（懒检测）
+    if db:
+        try:
+            db._execute(
+                "UPDATE contents SET language = %s WHERE content_id = %s AND language IS NULL",
+                (source_lang, content_id),
+            )
+        except Exception:
+            pass
 
     # 确定目标语言
     if target_lang:

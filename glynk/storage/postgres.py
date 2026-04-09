@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS contents (
     status TEXT NOT NULL DEFAULT 'parsing',
     error_message TEXT,
     total_chars INT DEFAULT 0,
+    language TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
