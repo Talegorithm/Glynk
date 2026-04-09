@@ -120,10 +120,14 @@ export default function LibraryPage() {
           {searchResults.length === 0 ? (
             <p className="text-center text-sm text-gray-400 dark:text-gray-500 py-16">无结果</p>
           ) : (
-            searchResults.map((r) => (
+            searchResults.map((r) => {
+              const spans = r.anchor?.spans || [];
+              const loc = spans[0] || '';
+              const to = loc ? `/read/${r.content_id}?loc=${loc}` : `/read/${r.content_id}`;
+              return (
               <Link
                 key={r.annotation_id}
-                to={`/read/${r.content_id}`}
+                to={to}
                 className="block p-4 md:p-5 rounded-xl glass-panel hover:-translate-y-0.5 transition-transform duration-200"
               >
                 <div className="flex items-center justify-between gap-3">
@@ -138,7 +142,8 @@ export default function LibraryPage() {
                   {r.text}
                 </p>
               </Link>
-            ))
+              );
+            })
           )}
         </div>
       )}
