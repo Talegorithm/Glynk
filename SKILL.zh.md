@@ -298,3 +298,122 @@ curl "$GLYNK_API_URL/api/content/{content_id}/chunk?size=3000&from={span_id}"
 4. **Agent 使用 `ghost` 颜色** — Agent 标注不会在阅读器中显示可见高亮
 5. **Hook 服务于发现** — 写成别人会搜索的问题，而非内容摘要
 6. **无特殊权限** — Agent 和任何第三方客户端使用完全相同的公开 API
+
+# 当用户发给你 URL 或者文件路径时
+
+## 步骤 1：摄入内容
+
+```bash
+# URL
+curl -X POST "$GLYNK_API_URL/api/ingest" \
+  -H "Authorization: Bearer $GLYNK_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"source":"用户给的URL"}'
+
+# 本地文件
+curl -X POST "$GLYNK_API_URL/api/ingest/upload" \
+  -H "Authorization: Bearer $GLYNK_TOKEN" \
+  -F "file=@用户给的文件路径"
+```
+
+摄入成功后获得 `content_id`，后续操作都基于这个 ID。
+
+## 步骤 2：通读全文
+
+用 chunk 接口逐页阅读（AI 视图，省 token）：
+
+```bash
+curl "$GLYNK_API_URL/api/content/{content_id}/chunk?size=20000"
+# 用 next_from 翻页，直到 has_more 为 false
+```
+
+阅读过程中做三件事：
+
+### 2.1 积累大纲
+
+在本地（你的工作记忆中）维护一个大纲结构。边读边更新，**读完全文后一次性提交**：
+
+```bash
+curl -X PUT "$GLYNK_API_URL/api/content/{content_id}/outline" \
+  -H "Authorization: Bearer $GLYNK_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"outline": [...]}'
+```
+
+大纲要求见上方「大纲」章节。
+
+### 2.2 生成 Hook
+
+每段有价值的内容，反推一个问题（参考上方「Hook（Agent 标注）」章节）。每攒 ~20 条批量提交：
+
+```bash
+curl -X POST "$GLYNK_API_URL/api/annotate/batch" \
+  -H "Authorization: Bearer $GLYNK_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"annotations":[
+    {"content_id":"...","type":"hook",
+     "anchor":{"type":"text","spans":["xxx-0-p5-s1"],"color":"ghost"},
+     "text":"问题文本","tags":["标签1","标签2"],"contextuality":"standalone"}
+  ]}'
+```
+
+### 2.3 帮用户划线（Highlight + Note）
+
+根据你对用户的了解（兴趣、背景、工作领域），挑选用户可能特别感兴趣的段落进行高亮，并附上简短笔记解释为什么这段值得关注。
+
+```bash
+curl -X POST "$GLYNK_API_URL/api/annotate/batch" \
+  -H "Authorization: Bearer $GLYNK_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"annotations":[
+    {"content_id":"...","type":"highlight",
+     "anchor":{"type":"text","spans":["xxx-0-p12-s1","xxx-0-p12-s2"],"color":"yellow"},
+     "text":"原文内容（用于 embedding 搜索）",
+     "tags":["关键词"],"contextuality":"standalone"},
+    {"content_id":"...","type":"note",
+     "anchor":{"type":"text","spans":["xxx-0-p12-s1"],"color":"blue"},
+     "text":"这段话和你正在做的XX项目直接相关：...",
+     "tags":[],"contextuality":"embedded"}
+  ]}'
+```
+
+高亮颜色选择：
+- `yellow`：核心观点、关键论述
+- `green`：方法论、可操作的建议
+- `blue`：案例、数据、论据
+- `pink`：令人意外的观点、反直觉的发现
+
+## 步骤 3：向用户汇报
+
+通读结束后，向用户汇报以下内容：
+
+1. **内容概要**：一段话概括全文核心思想
+2. **大纲预览**：展示你提交的大纲结构（顶层条目）
+3. **精选划线**：列出你认为用户最感兴趣的 5-10 处划线，每处包括：
+   - **导读**：为什么划这里（与用户的关联、前文概要）
+   - **原文**：被划线的原始文本
+   - **链接**：点击可在浏览器中打开并定位到对应位置
+
+### 链接格式
+
+浏览器阅读链接格式为：
+
+```
+{GLYNK_WEB_URL}/read/{content_id}?loc={span_id}
+```
+
+其中 `GLYNK_WEB_URL` 默认为 `https://brainow.link`（或查看环境变量 `GLYNK_WEB_URL`）。
+
+示例：`https://brainow.link/read/a1b2c3d4?loc=a1b2c3d4-5-p12-s1`
+
+用户点击此链接后，浏览器会打开阅读器并自动滚动到对应段落。**注意：用户需要事先在浏览器中登录（粘贴 Token），否则部分功能（标注显示、阅读进度）不可用。**
+
+## 数量指引
+
+| 内容长度 | Hook 数量 | 高亮/笔记数量 | 大纲顶层条目 |
+|----------|-----------|--------------|-------------|
+| 短文（< 1万字） | 5-15 | 3-8 | 3-8 |
+| 中篇（1-5万字） | 20-60 | 10-25 | 8-15 |
+| 长篇（> 5万字） | 50-150 | 20-50 | 15-30 |
+
+宁缺毋滥，质量优先。
