@@ -6,6 +6,8 @@ import type { Annotation } from '../types/annotation';
 
 type FilterTab = 'all' | 'highlight' | 'note' | 'hook';
 
+const PAGE_SIZE = 50;
+
 const tabs: { key: FilterTab; label: string }[] = [
   { key: 'all', label: '全部' },
   { key: 'highlight', label: '高亮' },
@@ -16,17 +18,20 @@ const tabs: { key: FilterTab; label: string }[] = [
 export default function NotesPage() {
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
   const [filter, setFilter] = useState<FilterTab>('all');
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [isSearch, setIsSearch] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (p = 0) => {
     setLoading(true);
     try {
       const typeParam = filter === 'all' ? undefined : filter;
-      const res = await getMyAnnotations({ type: typeParam, limit: 50 });
+      const res = await getMyAnnotations({ type: typeParam, limit: PAGE_SIZE, offset: p * PAGE_SIZE });
       setAnnotations(res.annotations);
       setTotal(res.total);
+      setIsSearch(false);
     } catch {
       toast.error('加载失败');
     } finally {
@@ -35,18 +40,27 @@ export default function NotesPage() {
   }, [filter]);
 
   useEffect(() => {
-    if (!query.trim()) load();
+    setPage(0);
+    if (!query.trim()) load(0);
   }, [load, query]);
+
+  function handlePageChange(newPage: number) {
+    setPage(newPage);
+    load(newPage);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     const q = query.trim();
-    if (!q) { load(); return; }
+    if (!q) { setPage(0); load(0); return; }
     setLoading(true);
     try {
       const res = await searchMyAnnotations(q);
       setAnnotations(res.results);
       setTotal(res.results.length);
+      setIsSearch(true);
+      setPage(0);
     } catch {
       toast.error('搜索失败');
     } finally {
@@ -66,12 +80,20 @@ export default function NotesPage() {
     reaction: { label: '反应', cls: 'bg-green-100 text-green-700' },
   };
 
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const offset = page * PAGE_SIZE;
+
   return (
     <div className="max-w-3xl mx-auto px-6 py-10">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Notes</h1>
         <span className="text-sm text-gray-400 dark:text-gray-500">
-          {annotations.length < total ? `最新 ${annotations.length} / ${total} 条` : `${total} 条`}
+          {total > 0 && (isSearch
+            ? `${total} 条结果`
+            : totalPages > 1
+              ? `${offset + 1}-${Math.min(offset + annotations.length, total)} / ${total} 条`
+              : `${total} 条`
+          )}
         </span>
       </div>
 
@@ -89,7 +111,7 @@ export default function NotesPage() {
         {tabs.map((t) => (
           <button
             key={t.key}
-            onClick={() => setFilter(t.key)}
+            onClick={() => { setFilter(t.key); setPage(0); }}
             className={`px-3 py-1.5 text-sm rounded-lg cursor-pointer transition-colors ${
               filter === t.key
                 ? 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900'
@@ -144,6 +166,29 @@ export default function NotesPage() {
               </Link>
             );
           })}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {!loading && !isSearch && totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 mt-8">
+          <button
+            onClick={() => handlePageChange(page - 1)}
+            disabled={page === 0}
+            className="px-3 py-1.5 text-sm rounded-lg cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-default text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+          >
+            上一页
+          </button>
+          <span className="text-sm text-gray-400 dark:text-gray-500 tabular-nums">
+            {page + 1} / {totalPages}
+          </span>
+          <button
+            onClick={() => handlePageChange(page + 1)}
+            disabled={page >= totalPages - 1}
+            className="px-3 py-1.5 text-sm rounded-lg cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-default text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+          >
+            下一页
+          </button>
         </div>
       )}
     </div>
