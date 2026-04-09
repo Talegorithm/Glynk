@@ -17,6 +17,7 @@ import type { Annotation, TextSelectionAnchor } from '../../types/annotation';
 import type { FileContent } from '../../types/reader';
 import { getColorByKey, DEFAULT_COLOR } from '../../config/colors';
 import { useReaderSettingsStore } from '../../store/readerSettings';
+import { useAuthStore } from '../../store/auth';
 import { useT } from '../../i18n';
 
 // 单个文件块组件
@@ -123,8 +124,13 @@ const FileSection = memo(
 FileSection.displayName = 'FileSection';
 
 
-export function ReaderContent() {
+interface ReaderContentProps {
+  requestLogin?: () => void;
+}
+
+export function ReaderContent({ requestLogin }: ReaderContentProps) {
   const t = useT();
+  const token = useAuthStore((state) => state.token);
   const contentId = useReaderStore((state) => state.contentId);
   const { fontSize, fontFamily } = useReaderSettingsStore();
   const loadedFiles = useReaderStore((state) => state.loadedFiles);
@@ -400,6 +406,10 @@ export function ReaderContent() {
 
   const handleHighlight = async (colorKey?: string) => {
     if (!selectionRange || !contentId) return;
+    if (!token) {
+      requestLogin?.();
+      return;
+    }
 
     const colorConfig = colorKey ? getColorByKey(colorKey) : DEFAULT_COLOR;
     if (!colorConfig) return;
@@ -442,6 +452,10 @@ export function ReaderContent() {
 
   const handleAnnotate = () => {
     if (!selectionRange) return;
+    if (!token) {
+      requestLogin?.();
+      return;
+    }
     setPendingAnnotation(selectionRange);
     setShowAnnotationDialog(true);
     clearSelection();

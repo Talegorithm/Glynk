@@ -13,7 +13,11 @@ const zh: Record<string, string> = {
   'landing.hero.desc': 'Glynk 是 Agent 时代的开放内容基础设施。',
   'landing.hero.highlight': '导入、标注、语义搜索 —— 让知识自由流动。',
   'landing.cta.start': '开始使用',
-  'landing.cta.docs': '查看 API 文档',
+  'landing.cta.skill': '安装 SKILL',
+  'landing.cta.copied': '已复制！',
+  'landing.skill.copy_cmd': '复制安装命令',
+  'landing.skill.full_text': 'SKILL 全文',
+  'landing.skill.full_text_desc': '复制后粘贴给任何 Agent',
   'landing.how': 'How It Works',
   'landing.step1.title': '导入',
   'landing.step1.desc': '从 URL、文件或 API 导入内容，自动解析结构',
@@ -23,8 +27,8 @@ const zh: Record<string, string> = {
   'landing.step3.desc': '语义搜索跨越所有内容，找到隐藏的关联',
   'landing.step4.title': '飞轮',
   'landing.step4.desc': '越多人标注，内容越丰富，发现越精准',
-  'landing.dev': 'For Developers',
-  'landing.dev.desc': 'RESTful API, 语义搜索, 批量操作 —— 一切为自动化而生',
+  'landing.dev': 'For Agents',
+  'landing.dev.desc': '兼容 Agent Skills 标准 —— Claude Code / Cursor / Copilot / Codex 一键安装',
   'landing.footer': 'glynk.wiki · 开放内容基础设施',
 
   // Login
@@ -104,6 +108,7 @@ const zh: Record<string, string> = {
   'reader.outline.empty': '暂无大纲',
   'reader.translation_pending': '正在准备翻译...',
   'reader.translation_failed': '翻译失败，显示原文',
+  'reader.login_hint': '登录后可保存阅读进度、划线和笔记',
 
   // Reader Settings
   'settings.appearance': '外观',
@@ -162,7 +167,11 @@ const en: Record<string, string> = {
   'landing.hero.desc': 'Glynk is open content infrastructure for the Agent era.',
   'landing.hero.highlight': 'Ingest, annotate, semantic search — let knowledge flow freely.',
   'landing.cta.start': 'Get Started',
-  'landing.cta.docs': 'API Docs',
+  'landing.cta.skill': 'Install SKILL',
+  'landing.cta.copied': 'Copied!',
+  'landing.skill.copy_cmd': 'Copy install command',
+  'landing.skill.full_text': 'Full SKILL Text',
+  'landing.skill.full_text_desc': 'Copy and paste to any agent',
   'landing.how': 'How It Works',
   'landing.step1.title': 'Ingest',
   'landing.step1.desc': 'Import from URL, file, or API — auto-parse structure',
@@ -172,8 +181,8 @@ const en: Record<string, string> = {
   'landing.step3.desc': 'Semantic search across all content, find hidden connections',
   'landing.step4.title': 'Flywheel',
   'landing.step4.desc': 'More annotations, richer content, sharper discovery',
-  'landing.dev': 'For Developers',
-  'landing.dev.desc': 'RESTful API, semantic search, batch operations — built for automation',
+  'landing.dev': 'For Agents',
+  'landing.dev.desc': 'Compatible with the Agent Skills standard — one-click install for Claude Code / Cursor / Copilot / Codex',
   'landing.footer': 'glynk.wiki · Open Content Infrastructure',
 
   // Login
@@ -253,6 +262,7 @@ const en: Record<string, string> = {
   'reader.outline.empty': 'No outline',
   'reader.translation_pending': 'Preparing translation...',
   'reader.translation_failed': 'Translation failed, showing original',
+  'reader.login_hint': 'Log in to save reading progress, highlights and notes',
 
   // Reader Settings
   'settings.appearance': 'Appearance',

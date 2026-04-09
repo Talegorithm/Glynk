@@ -2,7 +2,7 @@
  * 阅读器页面 - 从 Brainow 迁移，适配 Glynk
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useReaderStore } from '../store/reader';
 import { ReaderLayout } from '../components/reader/ReaderLayout';
@@ -10,6 +10,7 @@ import { ReaderToolbar } from '../components/reader/ReaderToolbar';
 import { ReaderTOC } from '../components/reader/ReaderTOC';
 import { ReaderOutline } from '../components/reader/ReaderOutline';
 import { ReaderContent } from '../components/reader/ReaderContent';
+import { LoginModal } from '../components/LoginModal';
 import { getReadingProgress, startReadingSession, endReadingSession } from '../api/content';
 import { useAuthStore } from '../store/auth';
 import { useT } from '../i18n';
@@ -29,6 +30,8 @@ export default function ReaderPage() {
   const sessionIdRef = useRef<string | null>(null);
   const sessionStartRef = useRef<number>(0);
   const initedRef = useRef(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const loginDismissedRef = useRef(false);
 
   // 初始化阅读器
   useEffect(() => {
@@ -52,6 +55,13 @@ export default function ReaderPage() {
 
     doInit();
   }, [contentId, locParam, init, jumpToLocation, token]);
+
+  // 未登录时弹出登录提示
+  useEffect(() => {
+    if (!token && !loginDismissedRef.current) {
+      setShowLoginModal(true);
+    }
+  }, [token]);
 
   // 阅读会话追踪
   useEffect(() => {
@@ -118,12 +128,29 @@ export default function ReaderPage() {
     );
   }
 
+  const handleLoginClose = () => {
+    setShowLoginModal(false);
+    loginDismissedRef.current = true;
+  };
+
+  const requestLogin = () => {
+    setShowLoginModal(true);
+  };
+
   return (
-    <ReaderLayout
-      toolbar={<ReaderToolbar />}
-      toc={<ReaderTOC />}
-      outline={<ReaderOutline />}
-      content={<ReaderContent />}
-    />
+    <>
+      <ReaderLayout
+        toolbar={<ReaderToolbar />}
+        toc={<ReaderTOC />}
+        outline={<ReaderOutline />}
+        content={<ReaderContent requestLogin={requestLogin} />}
+      />
+      {showLoginModal && !token && (
+        <LoginModal
+          onClose={handleLoginClose}
+          hint={t('reader.login_hint')}
+        />
+      )}
+    </>
   );
 }

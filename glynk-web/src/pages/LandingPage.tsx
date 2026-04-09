@@ -1,8 +1,50 @@
+import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useT } from '../i18n';
 
+const SKILL_RAW_URL = 'https://raw.githubusercontent.com/Talegorithm/Glynk/main/SKILL.md';
+
+const INSTALL_COMMANDS = {
+  claude: `curl -sL ${SKILL_RAW_URL} --create-dirs -o ~/.claude/skills/glynk/SKILL.md`,
+  openclaw: `mkdir -p ~/.openclaw/skills/glynk && curl -sL ${SKILL_RAW_URL} -o ~/.openclaw/skills/glynk/SKILL.md`,
+};
+
 export default function LandingPage() {
   const t = useT();
+  const [copied, setCopied] = useState<string | null>(null);
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!showMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showMenu]);
+
+  const copyText = (text: string, label: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(label);
+      setShowMenu(false);
+      setTimeout(() => setCopied(null), 2000);
+    });
+  };
+
+  const copySkillContent = async () => {
+    try {
+      const res = await fetch(SKILL_RAW_URL);
+      const text = await res.text();
+      copyText(text, 'full');
+    } catch {
+      // Fallback: copy the URL
+      copyText(SKILL_RAW_URL, 'full');
+    }
+  };
 
   const steps = [
     { emoji: '1', title: t('landing.step1.title'), desc: t('landing.step1.desc') },
@@ -31,12 +73,58 @@ export default function LandingPage() {
               >
                 {t('landing.cta.start')}
               </Link>
-              <Link
-                to="/docs"
-                className="px-8 py-3.5 bg-white/50 dark:bg-gray-800/50 backdrop-blur border border-white/40 dark:border-gray-700/50 rounded-xl text-base font-semibold text-gray-800 dark:text-gray-200 hover:bg-white/80 dark:hover:bg-gray-700/80 hover:-translate-y-0.5 transition-all w-full sm:w-auto text-center"
-              >
-                {t('landing.cta.docs')}
-              </Link>
+
+              {/* Install Skill dropdown */}
+              <div className="relative w-full sm:w-auto" ref={menuRef}>
+                <button
+                  onClick={() => setShowMenu(!showMenu)}
+                  className="px-8 py-3.5 bg-white/50 dark:bg-gray-800/50 backdrop-blur border border-white/40 dark:border-gray-700/50 rounded-xl text-base font-semibold text-gray-800 dark:text-gray-200 hover:bg-white/80 dark:hover:bg-gray-700/80 hover:-translate-y-0.5 transition-all w-full sm:w-auto text-center cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {copied ? t('landing.cta.copied') : t('landing.cta.skill')}
+                  {!copied && (
+                    <svg className={`w-4 h-4 transition-transform ${showMenu ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  )}
+                </button>
+
+                {showMenu && (
+                  <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 sm:left-0 sm:translate-x-0 w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl overflow-hidden z-50">
+                    <button
+                      onClick={() => copyText(INSTALL_COMMANDS.claude, 'claude')}
+                      className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer flex items-start gap-3"
+                    >
+                      <span className="text-lg mt-0.5">{'>'}_</span>
+                      <div>
+                        <div className="text-sm font-semibold text-gray-900 dark:text-white">Claude Code</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('landing.skill.copy_cmd')}</div>
+                      </div>
+                    </button>
+                    <div className="border-t border-gray-100 dark:border-gray-700" />
+                    <button
+                      onClick={() => copyText(INSTALL_COMMANDS.openclaw, 'openclaw')}
+                      className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer flex items-start gap-3"
+                    >
+                      <span className="text-lg mt-0.5">🦞</span>
+                      <div>
+                        <div className="text-sm font-semibold text-gray-900 dark:text-white">OpenClaw</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('landing.skill.copy_cmd')}</div>
+                      </div>
+                    </button>
+                    <div className="border-t border-gray-100 dark:border-gray-700" />
+                    <button
+                      onClick={copySkillContent}
+                      className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer flex items-start gap-3"
+                    >
+                      <span className="text-lg mt-0.5">📋</span>
+                      <div>
+                        <div className="text-sm font-semibold text-gray-900 dark:text-white">{t('landing.skill.full_text')}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('landing.skill.full_text_desc')}</div>
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </section>
@@ -65,7 +153,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Developer */}
+        {/* For Agents */}
         <section className="px-6 py-24 w-full">
           <div className="max-w-3xl mx-auto glass-panel rounded-3xl p-10 md:p-12 hover:-translate-y-1 transition-transform duration-300">
             <h2 className="text-center text-sm font-bold tracking-widest uppercase text-gray-500 dark:text-gray-400 mb-10 drop-shadow-sm">
@@ -73,10 +161,11 @@ export default function LandingPage() {
             </h2>
             <div className="bg-gray-900/90 dark:bg-black/90 backdrop-blur border border-gray-700/50 rounded-2xl p-6 overflow-x-auto shadow-2xl">
               <pre className="text-sm text-gray-300 font-mono leading-relaxed whitespace-pre">
-  {`curl -X POST https://glynk.wiki/api/search/semantic \\
-    -H "Authorization: Bearer <your-token>" \\
-    -H "Content-Type: application/json" \\
-    -d '{"text": "如何理解注意力机制", "top_k": 5}'`}
+  {`# Claude Code
+${INSTALL_COMMANDS.claude}
+
+# OpenClaw
+${INSTALL_COMMANDS.openclaw}`}
               </pre>
             </div>
             <p className="mt-8 text-center text-sm font-medium text-gray-600 dark:text-gray-400">

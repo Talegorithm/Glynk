@@ -31,10 +31,8 @@ export default function App() {
           </Route>
         </Route>
 
-        <Route element={<PrivateRoute />}>
-          <Route path="/read/:contentId" element={<ReaderPage />} />
-          <Route path="/read/:contentId/:fileIdx" element={<ReaderPage />} />
-        </Route>
+        <Route path="/read/:contentId" element={<ReaderPage />} />
+        <Route path="/read/:contentId/:fileIdx" element={<ReaderPage />} />
       </Routes>
     </TimeGradientBg>
   );
