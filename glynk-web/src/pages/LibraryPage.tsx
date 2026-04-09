@@ -13,14 +13,19 @@ const sourceIcons: Record<string, string> = {
   web: '\u{1F310}',
 };
 
+// Cache search results in module scope so they survive navigation
+let cachedQuery = '';
+let cachedResults: SemanticSearchResult[] | null = null;
+
 export default function LibraryPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [contents, setContents] = useState<Content[]>([]);
   const [total, setTotal] = useState(0);
+  const urlQuery = searchParams.get('q') || '';
+  const [query, setQuery] = useState(urlQuery);
   const [searchResults, setSearchResults] = useState<SemanticSearchResult[] | null>(null);
-  const [query, setQuery] = useState(searchParams.get('q') || '');
   const [loading, setLoading] = useState(true);
-  const initialSearchDone = useRef(false);
+  const restoredRef = useRef(false);
 
   useEffect(() => {
     listContents(50, 0)
@@ -29,25 +34,36 @@ export default function LibraryPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Restore search from URL on mount
+  // Restore cached results or re-search from URL
   useEffect(() => {
-    if (initialSearchDone.current) return;
-    const q = searchParams.get('q');
-    if (q) {
-      initialSearchDone.current = true;
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+
+    if (urlQuery && cachedQuery === urlQuery && cachedResults) {
+      // Restore from cache (instant, no re-fetch)
+      setSearchResults(cachedResults);
+      setLoading(false);
+    } else if (urlQuery) {
+      // Re-search (first time or different query)
       setLoading(true);
-      semanticSearch({ text: q, top_k: 20 })
-        .then((res) => setSearchResults(res.results))
+      semanticSearch({ text: urlQuery, top_k: 20 })
+        .then((res) => {
+          setSearchResults(res.results);
+          cachedQuery = urlQuery;
+          cachedResults = res.results;
+        })
         .catch(() => toast.error('搜索失败'))
         .finally(() => setLoading(false));
     }
-  }, [searchParams]);
+  }, [urlQuery]);
 
   const handleSearch = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     const q = query.trim();
     if (!q) {
       setSearchResults(null);
+      cachedQuery = '';
+      cachedResults = null;
       setSearchParams({});
       return;
     }
@@ -56,6 +72,8 @@ export default function LibraryPage() {
     try {
       const res = await semanticSearch({ text: q, top_k: 20 });
       setSearchResults(res.results);
+      cachedQuery = q;
+      cachedResults = res.results;
     } catch {
       toast.error('搜索失败');
     } finally {
@@ -74,7 +92,6 @@ export default function LibraryPage() {
         )}
       </div>
 
-      {/* Search */}
       <form onSubmit={handleSearch} className="mb-8">
         <input
           type="text"
@@ -83,6 +100,8 @@ export default function LibraryPage() {
             setQuery(e.target.value);
             if (!e.target.value.trim()) {
               setSearchResults(null);
+              cachedQuery = '';
+              cachedResults = null;
               setSearchParams({});
             }
           }}

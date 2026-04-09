@@ -1,11 +1,28 @@
 import { Link, Outlet } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
 import { useThemeStore } from '../store/theme';
+import client from '../api/client';
+
+const LANG_OPTIONS = [
+  { code: 'zh', label: '中' },
+  { code: 'en', label: 'EN' },
+];
 
 export default function Layout() {
-  const { isAuthenticated, logout } = useAuthStore();
+  const { isAuthenticated, logout, preferredLang, setPreferredLang } = useAuthStore();
   const authenticated = isAuthenticated();
   const { theme, toggleTheme } = useThemeStore();
+
+  const handleLangChange = async (lang: string) => {
+    setPreferredLang(lang);
+    if (authenticated) {
+      try {
+        await client.patch('/users/me/preferences', { preferred_lang: lang });
+      } catch {
+        // ignore
+      }
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-transparent">
@@ -32,6 +49,23 @@ export default function Layout() {
           )}
         </div>
         <div className="flex items-center gap-4">
+          {/* Language preference */}
+          <div className="flex items-center gap-0.5 text-sm">
+            {LANG_OPTIONS.map((opt) => (
+              <button
+                key={opt.code}
+                onClick={() => handleLangChange(opt.code)}
+                className={`px-1.5 py-0.5 rounded text-xs cursor-pointer transition-colors ${
+                  preferredLang === opt.code
+                    ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 font-medium'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
           <button
             onClick={toggleTheme}
             className="p-1.5 rounded-md hover:bg-gray-200/50 dark:hover:bg-gray-700/50 text-gray-700 dark:text-gray-300 transition-colors cursor-pointer"
@@ -53,7 +87,7 @@ export default function Layout() {
               </svg>
             )}
           </button>
-          
+
           {authenticated ? (
             <button
               onClick={logout}

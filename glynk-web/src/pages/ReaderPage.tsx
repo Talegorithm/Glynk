@@ -26,12 +26,14 @@ export default function ReaderPage() {
   const token = useAuthStore((state) => state.token);
   const sessionIdRef = useRef<string | null>(null);
   const sessionStartRef = useRef<number>(0);
-  const initedRef = useRef(false);
+  const initedRef = useRef<string | false>(false);
 
   // 初始化阅读器
   useEffect(() => {
-    if (!contentId || initedRef.current) return;
-    initedRef.current = true;
+    if (!contentId) return;
+    // Re-init if contentId changed (navigating between books)
+    if (initedRef.current === contentId) return;
+    initedRef.current = contentId;
 
     const doInit = async () => {
       await init(contentId);
@@ -97,7 +99,7 @@ export default function ReaderPage() {
   // 清理
   useEffect(() => {
     return () => {
-      initedRef.current = false;
+      initedRef.current = false as any;
       reset();
     };
   }, [reset]);
