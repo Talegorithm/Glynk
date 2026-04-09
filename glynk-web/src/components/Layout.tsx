@@ -1,6 +1,7 @@
 import { Link, Outlet } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
 import { useThemeStore } from '../store/theme';
+import { useT } from '../i18n';
 import client from '../api/client';
 
 const LANG_OPTIONS = [
@@ -12,6 +13,7 @@ export default function Layout() {
   const { isAuthenticated, logout, preferredLang, setPreferredLang } = useAuthStore();
   const authenticated = isAuthenticated();
   const { theme, toggleTheme } = useThemeStore();
+  const t = useT();
 
   const handleLangChange = async (lang: string) => {
     setPreferredLang(lang);
@@ -37,13 +39,13 @@ export default function Layout() {
                 to="/library"
                 className="text-sm font-medium text-gray-700 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100"
               >
-                Library
+                {t('nav.library')}
               </Link>
               <Link
                 to="/notes"
                 className="text-sm font-medium text-gray-700 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100"
               >
-                Notes
+                {t('nav.notes')}
               </Link>
             </>
           )}
@@ -93,7 +95,7 @@ export default function Layout() {
               onClick={logout}
               className="text-sm text-gray-700 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100 cursor-pointer"
             >
-              Logout
+              {t('nav.logout')}
             </button>
           ) : (
             <>
@@ -101,13 +103,13 @@ export default function Layout() {
                 to="/login"
                 className="text-sm text-gray-700 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100"
               >
-                Login
+                {t('nav.login')}
               </Link>
               <Link
                 to="/register"
                 className="text-sm bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 px-4 py-1.5 rounded-md hover:opacity-90"
               >
-                Register
+                {t('nav.register')}
               </Link>
             </>
           )}

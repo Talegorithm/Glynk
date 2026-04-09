@@ -10,8 +10,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useReaderStore } from '../../store/reader';
 import type { OutlineItem } from '../../types/reader';
+import { useT } from '../../i18n';
 
 export function ReaderOutline() {
+  const t = useT();
   const outline = useReaderStore((state) => state.outline);
   const contentId = useReaderStore((state) => state.contentId);
   const jumpToLocation = useReaderStore((state) => state.jumpToLocation);
@@ -191,7 +193,7 @@ export function ReaderOutline() {
   if (isLoading && outline.length === 0) {
     return (
       <div className="flex justify-center items-center py-8">
-        <div className="text-gray-500 dark:text-gray-400 text-sm">加载大纲中...</div>
+        <div className="text-gray-500 dark:text-gray-400 text-sm">{t('reader.outline.loading')}</div>
       </div>
     );
   }
@@ -200,7 +202,7 @@ export function ReaderOutline() {
   if (outline.length === 0) {
     return (
       <div className="flex justify-center items-center py-8">
-        <div className="text-gray-400 dark:text-gray-500 text-sm">暂无大纲</div>
+        <div className="text-gray-400 dark:text-gray-500 text-sm">{t('reader.outline.empty')}</div>
       </div>
     );
   }
@@ -278,7 +280,7 @@ export function ReaderOutline() {
     <div className="py-4">
       <div className="px-4 mb-4">
         <h2 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
-          大纲
+          {t('reader.outline')}
         </h2>
       </div>
 

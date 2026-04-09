@@ -8,6 +8,7 @@
 
 import { type ReactNode, useState, useRef, useEffect } from 'react';
 import { useReaderStore } from '../../store/reader';
+import { useT } from '../../i18n';
 
 interface ReaderLayoutProps {
   toolbar: ReactNode;     // 顶部工具栏
@@ -17,6 +18,7 @@ interface ReaderLayoutProps {
 }
 
 export function ReaderLayout({ toolbar, toc, outline, content }: ReaderLayoutProps) {
+  const t = useT();
   const tocVisible = useReaderStore((state) => state.tocVisible);
   const toggleToc = useReaderStore((state) => state.toggleToc);
 
@@ -106,7 +108,7 @@ export function ReaderLayout({ toolbar, toc, outline, content }: ReaderLayoutPro
                     : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100/80 dark:hover:bg-gray-800/80'
                 }`}
               >
-                目录
+                {t('reader.toc')}
               </button>
               <button
                 onClick={() => setActiveTab('outline')}
@@ -116,7 +118,7 @@ export function ReaderLayout({ toolbar, toc, outline, content }: ReaderLayoutPro
                     : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100/80 dark:hover:bg-gray-800/80'
                 }`}
               >
-                大纲
+                {t('reader.outline')}
               </button>
             </div>
 
@@ -159,7 +161,7 @@ export function ReaderLayout({ toolbar, toc, outline, content }: ReaderLayoutPro
             <div className="sticky top-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 z-10">
               <div className="px-4 py-3 flex justify-between items-center">
                 <span className="font-bold text-lg text-gray-900 dark:text-gray-100">
-                  {activeTab === 'toc' ? '目录' : '大纲'}
+                  {activeTab === 'toc' ? t('reader.toc') : t('reader.outline')}
                 </span>
                 <button
                   onClick={toggleToc}
@@ -179,7 +181,7 @@ export function ReaderLayout({ toolbar, toc, outline, content }: ReaderLayoutPro
                       : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
                   }`}
                 >
-                  目录
+                  {t('reader.toc')}
                 </button>
                 <button
                   onClick={() => setActiveTab('outline')}
@@ -189,7 +191,7 @@ export function ReaderLayout({ toolbar, toc, outline, content }: ReaderLayoutPro
                       : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
                   }`}
                 >
-                  大纲
+                  {t('reader.outline')}
                 </button>
               </div>
             </div>

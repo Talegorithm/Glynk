@@ -12,8 +12,10 @@ import { ReaderOutline } from '../components/reader/ReaderOutline';
 import { ReaderContent } from '../components/reader/ReaderContent';
 import { getReadingProgress, startReadingSession, endReadingSession } from '../api/content';
 import { useAuthStore } from '../store/auth';
+import { useT } from '../i18n';
 
 export default function ReaderPage() {
+  const t = useT();
   const { contentId } = useParams<{ contentId: string }>();
   const [searchParams] = useSearchParams();
   const locParam = searchParams.get('loc');
@@ -110,7 +112,7 @@ export default function ReaderPage() {
       <div className="flex items-center justify-center h-[calc(100vh-57px)]">
         <div className="text-center">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto mb-3" />
-          <p className="text-sm text-gray-400 dark:text-gray-500">加载中...</p>
+          <p className="text-sm text-gray-400 dark:text-gray-500">{t('reader.loading')}</p>
         </div>
       </div>
     );

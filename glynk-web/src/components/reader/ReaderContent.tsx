@@ -17,10 +17,12 @@ import type { Annotation, TextSelectionAnchor } from '../../types/annotation';
 import type { FileContent } from '../../types/reader';
 import { getColorByKey, DEFAULT_COLOR } from '../../config/colors';
 import { useReaderSettingsStore } from '../../store/readerSettings';
+import { useT } from '../../i18n';
 
 // 单个文件块组件
 const FileSection = memo(
   ({ fileIdx, content }: { fileIdx: number; content: FileContent }) => {
+    const t = useT();
     const contentRef = useRef<HTMLDivElement>(null);
     const reloadCurrentFile = useReaderStore((state) => state.reloadCurrentFile);
 
@@ -90,7 +92,7 @@ const FileSection = memo(
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
-            <p className="text-sm font-medium text-blue-800 dark:text-blue-200">正在准备翻译...</p>
+            <p className="text-sm font-medium text-blue-800 dark:text-blue-200">{t('reader.translation_pending')}</p>
           </div>
         )}
 
@@ -99,7 +101,7 @@ const FileSection = memo(
             <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <p className="text-sm font-medium text-red-800 dark:text-red-200">翻译失败，显示原文</p>
+            <p className="text-sm font-medium text-red-800 dark:text-red-200">{t('reader.translation_failed')}</p>
           </div>
         )}
 
@@ -122,6 +124,7 @@ FileSection.displayName = 'FileSection';
 
 
 export function ReaderContent() {
+  const t = useT();
   const contentId = useReaderStore((state) => state.contentId);
   const { fontSize, fontFamily } = useReaderSettingsStore();
   const loadedFiles = useReaderStore((state) => state.loadedFiles);
@@ -552,7 +555,7 @@ export function ReaderContent() {
   if (loadedFiles.size === 0 && !isLoading) {
     return (
       <div className="flex justify-center items-center py-20">
-        <p className="text-gray-500 dark:text-gray-400">暂无内容</p>
+        <p className="text-gray-500 dark:text-gray-400">{t('reader.empty')}</p>
       </div>
     );
   }
@@ -620,7 +623,7 @@ export function ReaderContent() {
         <div className="flex justify-center items-center py-8">
           <div className="text-gray-500 dark:text-gray-400">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2" />
-            <p className="text-sm">加载中...</p>
+            <p className="text-sm">{t('reader.loading')}</p>
           </div>
         </div>
       )}

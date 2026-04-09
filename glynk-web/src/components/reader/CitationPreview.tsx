@@ -3,6 +3,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useT } from '../../i18n';
 
 interface CitationPreviewProps {
   targetSpanId: string | null;
@@ -10,6 +11,7 @@ interface CitationPreviewProps {
 }
 
 export function CitationPreview({ targetSpanId, onClose }: CitationPreviewProps) {
+  const t = useT();
   const [content, setContent] = useState<string>('');
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
 
@@ -29,7 +31,7 @@ export function CitationPreview({ targetSpanId, onClose }: CitationPreviewProps)
     } else {
       const targetSpan = document.getElementById(targetSpanId);
       if (!targetSpan) {
-        setContent('引注内容在后续章节，请继续阅读查看完整上下文');
+        setContent(t('citation.not_loaded'));
       } else {
         const paragraph = targetSpan.closest('p');
         if (!paragraph) {
@@ -72,7 +74,7 @@ export function CitationPreview({ targetSpanId, onClose }: CitationPreviewProps)
         style={{ top: `${position.top}px`, left: `${position.left}px` }}
       >
         <div className="flex items-start justify-between mb-2">
-          <span className="text-xs text-gray-500 font-medium">引注预览</span>
+          <span className="text-xs text-gray-500 font-medium">{t('citation.preview')}</span>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors cursor-pointer"

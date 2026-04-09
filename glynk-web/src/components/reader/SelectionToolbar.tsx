@@ -6,6 +6,7 @@ import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { SelectionRange } from '../../utils/reader/selection';
 import { USER_SELECTABLE_COLORS } from '../../config/colors';
+import { useT } from '../../i18n';
 
 interface SelectionToolbarProps {
   selectionRange: SelectionRange | null;
@@ -22,6 +23,7 @@ export function SelectionToolbar({
   onCopy,
   onClose,
 }: SelectionToolbarProps) {
+  const t = useT();
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const toolbarRef = useRef<HTMLDivElement>(null);
@@ -104,34 +106,34 @@ export function SelectionToolbar({
           <button
             className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors cursor-pointer"
             onClick={() => setShowColorPicker(!showColorPicker)}
-            title="高亮"
+            title={t('selection.highlight')}
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
             </svg>
-            高亮
+            {t('selection.highlight')}
           </button>
 
           <button
             className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors cursor-pointer"
             onClick={onAnnotate}
-            title="添加笔记"
+            title={t('selection.note')}
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
             </svg>
-            笔记
+            {t('selection.note')}
           </button>
 
           <button
             className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors cursor-pointer"
             onClick={onCopy}
-            title="复制"
+            title={t('selection.copy')}
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
             </svg>
-            复制
+            {t('selection.copy')}
           </button>
 
           <div className="w-px h-6 bg-gray-200 dark:bg-gray-600" />
@@ -139,7 +141,7 @@ export function SelectionToolbar({
           <button
             className="px-2 py-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors cursor-pointer"
             onClick={onClose}
-            title="关闭"
+            title={t('selection.close')}
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -149,7 +151,7 @@ export function SelectionToolbar({
 
         {showColorPicker && (
           <div className="border-t border-gray-200 dark:border-gray-700 p-2">
-            <div className="text-xs text-gray-500 mb-2 px-1">选择颜色</div>
+            <div className="text-xs text-gray-500 mb-2 px-1">{t('selection.color')}</div>
             <div className="flex gap-2">
               {USER_SELECTABLE_COLORS.map((color) => (
                 <button

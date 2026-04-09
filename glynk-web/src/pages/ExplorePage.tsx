@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { semanticSearch } from '../api/search';
 import type { SemanticSearchResult } from '../api/search';
+import { useT } from '../i18n';
 
 export default function ExplorePage() {
+  const t = useT();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SemanticSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -34,7 +36,7 @@ export default function ExplorePage() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="在集体意识中搜索..."
+            placeholder={t('explore.placeholder')}
             className="w-full px-4 py-3 pr-24 border border-gray-300 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-300 dark:focus:ring-gray-600 text-base"
           />
           <button
@@ -42,17 +44,17 @@ export default function ExplorePage() {
             disabled={loading}
             className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-1.5 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer"
           >
-            {loading ? '...' : '搜索'}
+            {loading ? '...' : t('explore.submit')}
           </button>
         </div>
       </form>
 
       {loading && (
-        <p className="text-center text-sm text-gray-400 dark:text-gray-500">搜索中...</p>
+        <p className="text-center text-sm text-gray-400 dark:text-gray-500">{t('explore.loading')}</p>
       )}
 
       {!loading && searched && results.length === 0 && (
-        <p className="text-center text-sm text-gray-400 dark:text-gray-500">没有找到相关结果</p>
+        <p className="text-center text-sm text-gray-400 dark:text-gray-500">{t('explore.no_results')}</p>
       )}
 
       <div className="space-y-4">
@@ -75,7 +77,7 @@ export default function ExplorePage() {
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
-                  {r.type}
+                  {t(`type.${r.type}`)}
                 </span>
                 <span className="text-xs text-gray-400 dark:text-gray-500 tabular-nums">
                   {r.score.toFixed(2)}

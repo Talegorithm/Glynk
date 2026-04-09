@@ -2,12 +2,14 @@ import { useRef, useEffect } from 'react';
 import { useThemeStore } from '../../store/theme';
 import { useReaderSettingsStore } from '../../store/readerSettings';
 import { useReaderStore } from '../../store/reader';
+import { useT } from '../../i18n';
 
 interface ReaderSettingsMenuProps {
   onClose: () => void;
 }
 
 export function ReaderSettingsMenu({ onClose }: ReaderSettingsMenuProps) {
+  const t = useT();
   const menuRef = useRef<HTMLDivElement>(null);
   const { theme, setTheme } = useThemeStore();
   const { fontSize, fontFamily, setFontSize, setFontFamily } = useReaderSettingsStore();
@@ -51,7 +53,7 @@ export function ReaderSettingsMenu({ onClose }: ReaderSettingsMenuProps) {
       <div className="flex flex-col gap-5">
         {/* Theme Settings */}
         <div>
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block">外观</span>
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block">{t('settings.appearance')}</span>
           <div className="flex bg-gray-100/50 dark:bg-gray-800/50 rounded-xl p-1 gap-1">
             <button
               onClick={() => setTheme('light')}
@@ -59,7 +61,7 @@ export function ReaderSettingsMenu({ onClose }: ReaderSettingsMenuProps) {
                 theme === 'light' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
               }`}
             >
-              白昼
+              {t('settings.theme.light')}
             </button>
             <button
               onClick={() => setTheme('dark')}
@@ -67,7 +69,7 @@ export function ReaderSettingsMenu({ onClose }: ReaderSettingsMenuProps) {
                 theme === 'dark' ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
               }`}
             >
-              星夜
+              {t('settings.theme.dark')}
             </button>
             <button
               onClick={() => setTheme('sky')}
@@ -75,14 +77,14 @@ export function ReaderSettingsMenu({ onClose }: ReaderSettingsMenuProps) {
                 theme === 'sky' ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-500 hover:text-blue-500'
               }`}
             >
-              自动
+              {t('settings.theme.auto')}
             </button>
           </div>
         </div>
 
         {/* Typography */}
         <div>
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block">字体</span>
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block">{t('settings.font')}</span>
           <div className="flex bg-gray-100/50 dark:bg-gray-800/50 rounded-xl p-1 gap-1 mb-3">
             <button
               onClick={() => setFontFamily('sans-serif')}
@@ -90,7 +92,7 @@ export function ReaderSettingsMenu({ onClose }: ReaderSettingsMenuProps) {
                 fontFamily === 'sans-serif' ? 'bg-white dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
               }`}
             >
-              无衬线
+              {t('settings.font.sans')}
             </button>
             <button
               onClick={() => setFontFamily('serif')}
@@ -98,7 +100,7 @@ export function ReaderSettingsMenu({ onClose }: ReaderSettingsMenuProps) {
                 fontFamily === 'serif' ? 'bg-white dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
               }`}
             >
-              衬线
+              {t('settings.font.serif')}
             </button>
           </div>
 

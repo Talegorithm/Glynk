@@ -5,6 +5,7 @@ import { listContents } from '../api/content';
 import { semanticSearch } from '../api/search';
 import type { Content } from '../types/content';
 import type { SemanticSearchResult } from '../api/search';
+import { useT } from '../i18n';
 
 const sourceIcons: Record<string, string> = {
   book: '\u{1F4D6}',
@@ -18,6 +19,7 @@ let cachedQuery = '';
 let cachedResults: SemanticSearchResult[] | null = null;
 
 export default function LibraryPage() {
+  const t = useT();
   const [searchParams, setSearchParams] = useSearchParams();
   const [contents, setContents] = useState<Content[]>([]);
   const [total, setTotal] = useState(0);
@@ -30,7 +32,7 @@ export default function LibraryPage() {
   useEffect(() => {
     listContents(50, 0)
       .then((res) => { setContents(res.contents); setTotal(res.total); })
-      .catch(() => toast.error('加载失败'))
+      .catch(() => toast.error(t('library.load_error')))
       .finally(() => setLoading(false));
   }, []);
 
@@ -52,7 +54,7 @@ export default function LibraryPage() {
           cachedQuery = urlQuery;
           cachedResults = res.results;
         })
-        .catch(() => toast.error('搜索失败'))
+        .catch(() => toast.error(t('library.search_error')))
         .finally(() => setLoading(false));
     }
   }, [urlQuery]);
@@ -75,7 +77,7 @@ export default function LibraryPage() {
       cachedQuery = q;
       cachedResults = res.results;
     } catch {
-      toast.error('搜索失败');
+      toast.error(t('library.search_error'));
     } finally {
       setLoading(false);
     }
@@ -84,10 +86,10 @@ export default function LibraryPage() {
   return (
     <div className="max-w-5xl mx-auto px-6 py-10">
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Library</h1>
+        <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">{t('library.title')}</h1>
         {total > 0 && !searchResults && (
           <span className="text-sm text-gray-400 dark:text-gray-500">
-            {contents.length < total ? `最新 ${contents.length} / ${total} 条` : `${total} 条`}
+            {contents.length < total ? t('library.count_partial', { shown: contents.length, total }) : t('library.count', { count: total })}
           </span>
         )}
       </div>
@@ -105,20 +107,20 @@ export default function LibraryPage() {
               setSearchParams({});
             }
           }}
-          placeholder="语义搜索..."
+          placeholder={t('library.search_placeholder')}
           className="glynk-input"
         />
       </form>
 
       {loading && (
-        <p className="text-center text-sm text-gray-400 dark:text-gray-500 py-16">加载中...</p>
+        <p className="text-center text-sm text-gray-400 dark:text-gray-500 py-16">{t('library.loading')}</p>
       )}
 
       {/* Search results */}
       {!loading && searchResults && (
         <div className="space-y-3">
           {searchResults.length === 0 ? (
-            <p className="text-center text-sm text-gray-400 dark:text-gray-500 py-16">无结果</p>
+            <p className="text-center text-sm text-gray-400 dark:text-gray-500 py-16">{t('library.no_results')}</p>
           ) : (
             searchResults.map((r) => {
               const spans = r.anchor?.spans || [];
@@ -153,7 +155,7 @@ export default function LibraryPage() {
         <>
           {contents.length === 0 ? (
             <p className="text-center text-sm text-gray-400 dark:text-gray-500 py-16">
-              还没有内容
+              {t('library.empty')}
             </p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

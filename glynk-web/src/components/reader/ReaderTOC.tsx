@@ -11,8 +11,10 @@
 import { useState, useEffect } from 'react';
 import { useReaderStore } from '../../store/reader';
 import type { TOCItem } from '../../types/reader';
+import { useT } from '../../i18n';
 
 export function ReaderTOC() {
+  const t = useT();
   const toc = useReaderStore((state) => state.toc);
   const flatToc = useReaderStore((state) => state.flatToc);
   const isLoading = useReaderStore((state) => state.isLoading);
@@ -126,7 +128,7 @@ export function ReaderTOC() {
   if (isLoading && toc.length === 0) {
     return (
       <div className="flex justify-center items-center py-8">
-        <div className="text-gray-500 dark:text-gray-400 text-sm">加载目录中...</div>
+        <div className="text-gray-500 dark:text-gray-400 text-sm">{t('reader.toc.loading')}</div>
       </div>
     );
   }
@@ -135,7 +137,7 @@ export function ReaderTOC() {
   if (toc.length === 0) {
     return (
       <div className="flex justify-center items-center py-8">
-        <div className="text-gray-400 dark:text-gray-500 text-sm">暂无目录</div>
+        <div className="text-gray-400 dark:text-gray-500 text-sm">{t('reader.toc.empty')}</div>
       </div>
     );
   }
@@ -199,7 +201,7 @@ export function ReaderTOC() {
     <div className="py-4">
       <div className="px-4 mb-4">
         <h2 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
-          目录
+          {t('reader.toc')}
         </h2>
       </div>
 

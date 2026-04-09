@@ -3,19 +3,21 @@ import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { getMyAnnotations, searchMyAnnotations } from '../api/annotation';
 import type { Annotation } from '../types/annotation';
+import { useT } from '../i18n';
 
 type FilterTab = 'all' | 'highlight' | 'note' | 'hook';
 
 const PAGE_SIZE = 50;
 
-const tabs: { key: FilterTab; label: string }[] = [
-  { key: 'all', label: '全部' },
-  { key: 'highlight', label: '高亮' },
-  { key: 'hook', label: 'Hook' },
-  { key: 'note', label: '笔记' },
-];
+const tabKeys: FilterTab[] = ['all', 'highlight', 'hook', 'note'];
 
 export default function NotesPage() {
+  const t = useT();
+
+  const tabs = tabKeys.map((key) => ({
+    key,
+    label: t(`notes.tab.${key}`),
+  }));
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
@@ -33,7 +35,7 @@ export default function NotesPage() {
       setTotal(res.total);
       setIsSearch(false);
     } catch {
-      toast.error('加载失败');
+      toast.error(t('notes.load_error'));
     } finally {
       setLoading(false);
     }
@@ -62,7 +64,7 @@ export default function NotesPage() {
       setIsSearch(true);
       setPage(0);
     } catch {
-      toast.error('搜索失败');
+      toast.error(t('notes.search_error'));
     } finally {
       setLoading(false);
     }
@@ -74,10 +76,10 @@ export default function NotesPage() {
   }
 
   const typeBadge: Record<string, { label: string; cls: string }> = {
-    highlight: { label: '高亮', cls: 'bg-yellow-100 text-yellow-700' },
-    hook: { label: 'Hook', cls: 'bg-purple-100 text-purple-700' },
-    note: { label: '笔记', cls: 'bg-blue-100 text-blue-700' },
-    reaction: { label: '反应', cls: 'bg-green-100 text-green-700' },
+    highlight: { label: t('type.highlight'), cls: 'bg-yellow-100 text-yellow-700' },
+    hook: { label: t('type.hook'), cls: 'bg-purple-100 text-purple-700' },
+    note: { label: t('type.note'), cls: 'bg-blue-100 text-blue-700' },
+    reaction: { label: t('type.reaction'), cls: 'bg-green-100 text-green-700' },
   };
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -86,13 +88,13 @@ export default function NotesPage() {
   return (
     <div className="max-w-3xl mx-auto px-6 py-10">
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Notes</h1>
+        <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">{t('notes.title')}</h1>
         <span className="text-sm text-gray-400 dark:text-gray-500">
           {total > 0 && (isSearch
-            ? `${total} 条结果`
+            ? t('notes.results', { count: total })
             : totalPages > 1
-              ? `${offset + 1}-${Math.min(offset + annotations.length, total)} / ${total} 条`
-              : `${total} 条`
+              ? t('notes.range', { from: offset + 1, to: Math.min(offset + annotations.length, total), total })
+              : t('notes.count', { count: total })
           )}
         </span>
       </div>
@@ -102,31 +104,31 @@ export default function NotesPage() {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="搜索笔记..."
+          placeholder={t('notes.search_placeholder')}
           className="glynk-input"
         />
       </form>
 
       <div className="flex gap-1 mb-6">
-        {tabs.map((t) => (
+        {tabs.map((tab) => (
           <button
-            key={t.key}
-            onClick={() => { setFilter(t.key); setPage(0); }}
+            key={tab.key}
+            onClick={() => { setFilter(tab.key); setPage(0); }}
             className={`px-3 py-1.5 text-sm rounded-lg cursor-pointer transition-colors ${
-              filter === t.key
+              filter === tab.key
                 ? 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900'
                 : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
             }`}
           >
-            {t.label}
+            {tab.label}
           </button>
         ))}
       </div>
 
-      {loading && <p className="text-center text-sm text-gray-400 dark:text-gray-500 py-16">加载中...</p>}
+      {loading && <p className="text-center text-sm text-gray-400 dark:text-gray-500 py-16">{t('notes.loading')}</p>}
 
       {!loading && annotations.length === 0 && (
-        <p className="text-center text-sm text-gray-400 dark:text-gray-500 py-16">暂无标注</p>
+        <p className="text-center text-sm text-gray-400 dark:text-gray-500 py-16">{t('notes.empty')}</p>
       )}
 
       {!loading && (
@@ -177,7 +179,7 @@ export default function NotesPage() {
             disabled={page === 0}
             className="px-3 py-1.5 text-sm rounded-lg cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-default text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
           >
-            上一页
+            {t('notes.prev')}
           </button>
           <span className="text-sm text-gray-400 dark:text-gray-500 tabular-nums">
             {page + 1} / {totalPages}
@@ -187,7 +189,7 @@ export default function NotesPage() {
             disabled={page >= totalPages - 1}
             className="px-3 py-1.5 text-sm rounded-lg cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-default text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
           >
-            下一页
+            {t('notes.next')}
           </button>
         </div>
       )}
