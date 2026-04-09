@@ -227,6 +227,11 @@ class PostgresStore:
         ))
         return True
 
+    def delete_content(self, content_id: str) -> bool:
+        """删除内容及关联数据（annotations 通过 ON DELETE CASCADE 自动删除）"""
+        self._execute("DELETE FROM contents WHERE content_id = %s", (content_id,))
+        return True
+
     def get_content(self, content_id: str) -> Optional[dict]:
         return self._execute(
             "SELECT * FROM contents WHERE content_id = %s",

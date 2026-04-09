@@ -49,10 +49,17 @@ async def ingest_url(req: IngestRequest, user: dict = Depends(get_current_user))
             "toc": result.toc,
         }
     except ContentAlreadyExistsError as e:
-        raise HTTPException(409, {
-            "error": "content_already_exists",
-            "content_id": e.content.get("content_id"),
-        })
+        c = e.content
+        return {
+            "content_id": c.get("content_id"),
+            "title": c.get("title", ""),
+            "author": c.get("author", ""),
+            "source_type": c.get("source_type", ""),
+            "file_count": c.get("file_count", 0),
+            "total_chars": c.get("total_chars", 0),
+            "toc": [],
+            "existing": True,
+        }
     except Exception as e:
         raise HTTPException(500, f"Ingestion failed: {e}")
 
@@ -85,9 +92,16 @@ async def ingest_file(file: UploadFile = File(...),
             "toc": result.toc,
         }
     except ContentAlreadyExistsError as e:
-        raise HTTPException(409, {
-            "error": "content_already_exists",
-            "content_id": e.content.get("content_id"),
-        })
+        c = e.content
+        return {
+            "content_id": c.get("content_id"),
+            "title": c.get("title", ""),
+            "author": c.get("author", ""),
+            "source_type": c.get("source_type", ""),
+            "file_count": c.get("file_count", 0),
+            "total_chars": c.get("total_chars", 0),
+            "toc": [],
+            "existing": True,
+        }
     except Exception as e:
         raise HTTPException(500, f"Ingestion failed: {e}")

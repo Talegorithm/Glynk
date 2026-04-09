@@ -85,11 +85,25 @@ def extract_basic_metadata(html_content: str) -> dict:
 
 
 def download_url(url: str) -> bytes:
-    """下载 URL 内容"""
+    """下载 URL 内容。特定域名（微信等）走前端服务器代理绕过 IP 封锁。"""
     import httpx
+    import os
+    from urllib.parse import urlparse
+
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
     }
+
+    # 需要走代理的域名（服务器 IP 被封或需要 JS 渲染的）
+    proxy_domains = {'mp.weixin.qq.com', 'weixin.qq.com'}
+    host = urlparse(url).hostname or ''
+
+    if host in proxy_domains:
+        proxy_base = os.getenv("FETCH_PROXY_URL", "http://62.234.45.192:8888")
+        response = httpx.get(f"{proxy_base}/fetch", params={"url": url}, timeout=60)
+        response.raise_for_status()
+        return response.content
+
     response = httpx.get(url, timeout=30, follow_redirects=True, headers=headers)
     response.raise_for_status()
     return response.content

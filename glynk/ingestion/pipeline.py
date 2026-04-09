@@ -57,7 +57,19 @@ class IngestionPipeline:
         content_id = file_hash[:16]
         existing = self.db.get_content(content_id)
         if existing:
-            raise ContentAlreadyExistsError(existing)
+            # 允许覆盖：total_chars < 3000 且同 uid（或旧记录无 uid）
+            old_chars = existing.get('total_chars', 0) or 0
+            old_uid = existing.get('uid') or ''
+            if old_chars < 3000 and (not old_uid or old_uid == uid):
+                logger.info(f"Overwriting content {content_id} (old chars={old_chars}, uid={old_uid})")
+                self.db.delete_content(content_id)
+                # 清理磁盘
+                old_html_root = self.config.storage.html_root / content_id
+                if old_html_root.exists():
+                    import shutil
+                    shutil.rmtree(old_html_root, ignore_errors=True)
+            else:
+                raise ContentAlreadyExistsError(existing)
 
         # 3. 选择 handler，解析
         handler = self.registry.resolve(file_path, content_type, source_hint)
