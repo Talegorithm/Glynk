@@ -117,6 +117,7 @@ class Annotation:
     uid: str | None = None
     visibility: str = "public"
     query_id: str | None = None
+    version: str | None = None
     created_at: datetime | None = None
 
 
@@ -128,6 +129,7 @@ class QueryRequest:
     types: list[str] | None = None
     content_ids: list[str] | None = None
     uid: str | None = None
+    version: str | None = None
     top_k: int = 10
 
 

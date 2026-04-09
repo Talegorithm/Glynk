@@ -263,13 +263,13 @@ class PostgresStore:
         embedding_str = str(embedding) if embedding else None
         sql = """
             INSERT INTO annotations (id, content_id, anchor, type, text, tags,
-                contextuality, source, uid, visibility, query_id, embedding)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                contextuality, source, uid, visibility, query_id, embedding, version)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         self._execute(sql, (
             ann.id, ann.content_id, Json(ann.anchor), ann.type, ann.text,
             ann.tags, ann.contextuality, ann.source, ann.uid, ann.visibility,
-            ann.query_id, embedding_str,
+            ann.query_id, embedding_str, ann.version,
         ))
         return True
 
@@ -285,12 +285,12 @@ class PostgresStore:
                     emb_str = str(emb) if emb else None
                     cur.execute("""
                         INSERT INTO annotations (id, content_id, anchor, type, text, tags,
-                            contextuality, source, uid, visibility, query_id, embedding)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            contextuality, source, uid, visibility, query_id, embedding, version)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """, (
                         ann.id, ann.content_id, Json(ann.anchor), ann.type, ann.text,
                         ann.tags, ann.contextuality, ann.source, ann.uid, ann.visibility,
-                        ann.query_id, emb_str,
+                        ann.query_id, emb_str, ann.version,
                     ))
             conn.commit()
             return len(anns)

@@ -36,6 +36,7 @@ class AnnotateRequest(BaseModel):
     tags: list[str] = []
     contextuality: str = "standalone"
     visibility: str = "public"
+    version: str | None = None
 
 
 class BatchAnnotateRequest(BaseModel):
@@ -47,6 +48,7 @@ class QueryRequestModel(BaseModel):
     user_context: dict | None = None
     types: list[str] | None = None
     content_ids: list[str] | None = None
+    version: str | None = None
     top_k: int = 10
 
 
@@ -71,6 +73,7 @@ async def create_annotation(req: AnnotateRequest, user: dict = Depends(get_curre
         source="human",
         uid=user["uid"],
         visibility=req.visibility,
+        version=req.version,
     )
 
     result = await _annotation_service.create(ann)
@@ -102,6 +105,7 @@ async def create_batch(req: BatchAnnotateRequest, user: dict = Depends(get_curre
             source="human",
             uid=user["uid"],
             visibility=a.visibility,
+            version=a.version,
         )
         for a in req.annotations
     ]
@@ -126,6 +130,7 @@ async def query_annotations(req: QueryRequestModel,
         types=req.types or ["highlight", "hook"],
         content_ids=req.content_ids,
         uid=user["uid"] if user else None,
+        version=req.version,
         top_k=req.top_k,
     )
 

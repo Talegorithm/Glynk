@@ -34,6 +34,10 @@ class PgVectorStore:
                 conditions.append(f"content_id = ANY(%s)")
                 params.append(filters["content_ids"])
 
+            if "version" in filters:
+                conditions.append("version = %s")
+                params.append(filters["version"])
+
             if "uid" in filters and filters.get("include_private"):
                 conditions.append(f"(visibility = 'public' OR uid = %s)")
                 params.append(filters["uid"])

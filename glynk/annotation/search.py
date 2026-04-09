@@ -34,6 +34,8 @@ class RetrievalEngine:
         if request.uid:
             filters["uid"] = request.uid
             filters["include_private"] = True
+        if request.version:
+            filters["version"] = request.version
 
         # 3. 向量搜索
         raw_results = await self.vector_store.search(
