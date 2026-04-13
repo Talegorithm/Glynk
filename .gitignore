@@ -16,6 +16,7 @@ Glynk-data/
 /tmp/
 .cache
 glynk/agent/.traces
+resonote_backup/
 
 # IDE
 .idea/
