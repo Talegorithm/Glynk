@@ -221,7 +221,11 @@ function highlightWithinSpan(
 
   // 如果是整个 span，直接设置背景色
   if (startOffset === 0 && endOffset === text.length) {
-    span.style.backgroundColor = color;
+    if (color === 'ghost') {
+      span.classList.add('reader-ghost-highlight');
+    } else {
+      span.style.backgroundColor = color;
+    }
     span.setAttribute('data-highlighted', 'true');
     if (annotationId) {
       span.setAttribute('data-annotation-id', annotationId);
@@ -236,7 +240,11 @@ function highlightWithinSpan(
   const after = text.substring(endOffset);
 
   const highlightSpan = document.createElement('span');
-  highlightSpan.style.backgroundColor = color;
+  if (color === 'ghost') {
+    highlightSpan.classList.add('reader-ghost-highlight');
+  } else {
+    highlightSpan.style.backgroundColor = color;
+  }
   highlightSpan.setAttribute('data-highlighted', 'true');
   highlightSpan.textContent = highlighted;
   if (annotationId) {
@@ -315,6 +323,7 @@ export function removeHighlight(startSpanId: string, endSpanId: string): void {
 
   allSpans.forEach(span => {
     span.style.backgroundColor = '';
+    span.classList.remove('reader-ghost-highlight');
     span.removeAttribute('data-highlighted');
     span.removeAttribute('data-annotation-id');
     span.style.cursor = '';
@@ -346,6 +355,7 @@ export function removeHighlightById(annotationId: string): void {
         (parent as HTMLElement)?.normalize();
       } else {
         htmlElement.style.backgroundColor = '';
+        htmlElement.classList.remove('reader-ghost-highlight');
         htmlElement.removeAttribute('data-highlighted');
         htmlElement.removeAttribute('data-annotation-id');
         htmlElement.style.cursor = '';

@@ -301,22 +301,27 @@ export function ReaderContent({ requestLogin }: ReaderContentProps) {
           if (anchor.startSpanId && anchor.endSpanId) {
             // 新格式：精确选区高亮
             const colorConfig = getColorByKey(colorKey as string) || DEFAULT_COLOR;
+            const finalColor = colorKey === 'ghost' ? 'ghost' : colorConfig.highlight;
             highlightSpanRange(
               anchor.startSpanId,
               anchor.endSpanId,
               anchor.startOffset ?? 0,
               anchor.endOffset ?? 0,
-              colorConfig.highlight,
+              finalColor,
               annotation.id
             );
           } else if (anchor.spans && anchor.spans.length > 0) {
             // spans-based 标注（如 agent 创建的 hook）：高亮所有 spans
-            const spanColorConfig = getColorByKey(colorKey as string);
-            const spanColor = spanColorConfig?.highlight || 'rgba(226, 232, 240, 0.5)';
             anchor.spans.forEach((spanId: string) => {
               const span = document.getElementById(spanId);
               if (!span) return;
-              span.style.backgroundColor = spanColor;
+              if (colorKey === 'ghost') {
+                span.classList.add('reader-ghost-highlight');
+              } else {
+                const spanColorConfig = getColorByKey(colorKey as string);
+                const spanColor = spanColorConfig?.highlight || 'rgba(226, 232, 240, 0.5)';
+                span.style.backgroundColor = spanColor;
+              }
               span.setAttribute('data-highlighted', 'true');
               span.setAttribute('data-annotation-id', annotation.id);
               span.style.cursor = 'pointer';
@@ -610,6 +615,10 @@ export function ReaderContent({ requestLogin }: ReaderContentProps) {
           --reading-code-text: #cc3344;
           --reading-quote-bg: rgba(0,0,0,0.02);
           --reading-quote-border: rgba(0,0,0,0.1);
+          --reading-ghost-line: rgba(0,0,0,0.25);
+          --reading-ghost-line-hover: rgba(0,0,0,0.6);
+          --reading-ghost-bg-hover: rgba(255,255,255,0.5);
+          --reading-ghost-glow: rgba(0,0,0,0.05);
         }
         
         :root.dark {
@@ -625,6 +634,10 @@ export function ReaderContent({ requestLogin }: ReaderContentProps) {
           --reading-code-text: #ff8f9c;
           --reading-quote-bg: rgba(255,255,255,0.05);
           --reading-quote-border: rgba(255,255,255,0.25);
+          --reading-ghost-line: rgba(255,255,255,0.3);
+          --reading-ghost-line-hover: rgba(255,255,255,0.8);
+          --reading-ghost-bg-hover: rgba(255,255,255,0.1);
+          --reading-ghost-glow: rgba(255,255,255,0.2);
         }
 
         .reader-content {
@@ -660,6 +673,19 @@ export function ReaderContent({ requestLogin }: ReaderContentProps) {
         .reader-content a { color: var(--reading-p); text-decoration: none; word-break: break-word; border-bottom: 1px solid var(--reading-border); transition: all 0.2s ease; }
         .reader-content a:hover { color: var(--reading-h1); border-bottom-color: var(--reading-meta); }
         .reader-content a.citation-ref { color: var(--reading-p); cursor: pointer; border-bottom: 1px dashed var(--reading-border); }
+        .reader-ghost-highlight {
+          text-decoration: underline dashed var(--reading-ghost-line);
+          text-underline-offset: 4px;
+          text-decoration-thickness: 1px;
+          background-color: transparent !important;
+          transition: all 0.3s ease;
+        }
+        .reader-ghost-highlight:hover {
+          background-color: var(--reading-ghost-bg-hover) !important;
+          text-decoration-color: var(--reading-ghost-line-hover);
+          border-radius: 2px;
+          text-shadow: 0 0 8px var(--reading-ghost-glow);
+        }
         .reader-content hr { margin: 2.5em 0; border: none; height: 1px; background: linear-gradient(to right, transparent, var(--reading-border), transparent); }
         .reader-content section { margin-bottom: 2em; }
         @media (max-width: 640px) {
