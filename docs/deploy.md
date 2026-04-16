@@ -19,12 +19,16 @@
 export POSTGRES_HOST=ijiaodui.com
 export POSTGRES_PORT=32006
 export REMOTE_FILE_BASE=http://ijiaodui.com:32007
+export GLYNK_TOKEN=glk_xxx   # ingestion 要写远程文件时需要；必须在服务器白名单里
 uvicorn glynk.main:app --reload --port 8000
 ```
 
-- `REMOTE_FILE_BASE` 启用 `RemoteFileStore`（`glynk/storage/file_store.py`）：Reader 通过 HTTP 从远程读 HTML 文件，带 LRU 缓存
+- `REMOTE_FILE_BASE` 启用 `RemoteFileStore`（`glynk/storage/file_store.py`）：
+  - 读：HTTP GET `/media/{unit_id}/{filename}`，带 LRU 缓存
+  - 写：HTTP PUT `/api/internal/files/{unit_id}/{filename}`（ingestion 用），需 `GLYNK_TOKEN` 在服务器 `GLYNK_WRITE_ALLOWED_TOKENS` 白名单里
 - 不设 `REMOTE_FILE_BASE` 时默认走 `LocalFileStore`（本地磁盘），生产环境零影响
 - Auth token 和线上共用同一个 DB，账号通用
+- 服务器白名单 env：`GLYNK_WRITE_ALLOWED_TOKENS=glk_aaa,glk_bbb`（逗号分隔，不在名单内的 token 调 `/api/internal/files` → 403）
 
 ---
 

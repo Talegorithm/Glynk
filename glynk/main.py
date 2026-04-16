@@ -48,7 +48,7 @@ async def lifespan(app: FastAPI):
     anchor_service = AnchorService(db, vector_store, config.embedding)
     retrieval_engine = RetrievalEngine(db, vector_store, config.embedding)
     reader_service = ReaderService(file_store=file_store, db=db)
-    pipeline = IngestionPipeline(config, db)
+    pipeline = IngestionPipeline(config, db, file_store)
 
     # Inject services
     from glynk.api.ingest_router import set_pipeline
@@ -112,6 +112,7 @@ from glynk.api.content_router import router as unit_router
 from glynk.api.annotation_router import router as anchor_router
 from glynk.api.source_router import router as source_router
 from glynk.api.feedback_router import router as feedback_router
+from glynk.api.internal_router import router as internal_router
 
 app.include_router(auth_router, prefix="/api")
 app.include_router(ingest_router, prefix="/api")
@@ -119,6 +120,7 @@ app.include_router(unit_router, prefix="/api")
 app.include_router(anchor_router, prefix="/api")
 app.include_router(source_router, prefix="/api")
 app.include_router(feedback_router, prefix="/api")
+app.include_router(internal_router, prefix="/api")
 
 
 # ===== Media =====

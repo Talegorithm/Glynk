@@ -64,7 +64,8 @@ class AppConfig:
         """根据配置创建 FileStore。REMOTE_FILE_BASE 非空时用远程，否则用本地。"""
         from glynk.storage.file_store import LocalFileStore, RemoteFileStore
         if self.remote_file_base:
-            return RemoteFileStore(self.remote_file_base)
+            token = os.getenv("GLYNK_TOKEN") or None
+            return RemoteFileStore(self.remote_file_base, token=token)
         return LocalFileStore(self.storage.html_root)
 
     @classmethod

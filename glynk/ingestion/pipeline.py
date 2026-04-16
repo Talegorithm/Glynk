@@ -18,6 +18,7 @@ from glynk.config import AppConfig
 from glynk.models import IngestResult, ParsedContent, TOCItem
 from glynk.ingestion.registry import HandlerRegistry
 from glynk.ingestion.processing.html_processor import HTMLProcessor
+from glynk.storage.file_store import FileStore
 
 logger = logging.getLogger(__name__)
 
@@ -31,10 +32,11 @@ class ContentAlreadyExistsError(Exception):
 class IngestionPipeline:
     """结构化处理流水线。不跑LLM，只做确定性处理。"""
 
-    def __init__(self, config: AppConfig, db):
+    def __init__(self, config: AppConfig, db, file_store: FileStore):
         self.registry = HandlerRegistry()
         self.config = config
         self.db = db
+        self.file_store = file_store
 
     @staticmethod
     def _normalize_url(url: str) -> str:
@@ -106,10 +108,7 @@ class IngestionPipeline:
             if old_chars < 3000 and (not old_imported_by or old_imported_by == entity_id):
                 logger.info(f"Overwriting unit {unit_id} (old chars={old_chars})")
                 self.db.delete_unit(unit_id)
-                old_html_root = self.config.storage.html_root / unit_id
-                if old_html_root.exists():
-                    import shutil
-                    shutil.rmtree(old_html_root, ignore_errors=True)
+                self.file_store.delete_unit_dir(unit_id)
             else:
                 raise ContentAlreadyExistsError(existing)
 
@@ -120,27 +119,23 @@ class IngestionPipeline:
         # 5. HTML 标准化
         processed_files = []
         total_chars = 0
-        html_root = self.config.storage.html_root / unit_id
-        html_root.mkdir(parents=True, exist_ok=True)
 
         for file_idx, raw_html in enumerate(parsed.raw_html_parts):
             processor = HTMLProcessor(unit_id, file_idx)
             result = processor.process(raw_html, parsed.images)
             processed_files.append(result)
 
-            html_file = html_root / f"{file_idx}.html"
-            html_file.write_text(result.html, encoding='utf-8')
+            self.file_store.write_html(unit_id, f"{file_idx}.html", result.html)
 
             for img_name, img_data in result.images.items():
-                img_path = html_root / img_name
-                img_path.write_bytes(img_data)
+                self.file_store.write_bytes(unit_id, img_name, img_data)
 
             total_chars += result.sentence_count * 50
 
         # 6. TOC mapping
         toc_list = [item.to_dict() for item in parsed.toc] if parsed.toc else []
         if toc_list and parsed.file_names:
-            self._map_toc_to_span_ids(toc_list, parsed.file_names, unit_id, html_root)
+            self._map_toc_to_span_ids(toc_list, parsed.file_names, unit_id)
 
         # 7. 创建作者 Entity（dormant）
         author_entity_id = self._get_or_create_author_entity(parsed.author)
@@ -191,7 +186,7 @@ class IngestionPipeline:
         return Path(source)
 
     def _map_toc_to_span_ids(self, toc_list: list[dict], file_names: list[str],
-                              unit_id: str, html_root: Path):
+                              unit_id: str):
         """将 TOC EPUB href 映射为 span_id"""
         name_to_idx = {}
         for idx, name in enumerate(file_names):
@@ -201,10 +196,9 @@ class IngestionPipeline:
 
         file_first_span = {}
         for idx in range(len(file_names)):
-            html_file = html_root / f"{idx}.html"
-            if not html_file.exists():
+            html = self.file_store.read_html(unit_id, f"{idx}.html")
+            if html is None:
                 continue
-            html = html_file.read_text(encoding='utf-8')
             soup = BeautifulSoup(html, 'html.parser')
             first = soup.find('span', id=True)
             if first:
@@ -228,9 +222,8 @@ class IngestionPipeline:
                 return ""
 
             if anchor:
-                html_file = html_root / f"{file_idx}.html"
-                if html_file.exists():
-                    html = html_file.read_text(encoding='utf-8')
+                html = self.file_store.read_html(unit_id, f"{file_idx}.html")
+                if html is not None:
                     soup = BeautifulSoup(html, 'html.parser')
                     target = soup.find(id=anchor)
                     if target:
