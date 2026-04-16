@@ -1,12 +1,12 @@
 """
 摄入 API
 
-POST /ingest   导入内容
+POST /ingest         导入内容（URL 或路径）
+POST /ingest/upload  上传文件导入
 """
-import json
 import tempfile
 from pathlib import Path
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from pydantic import BaseModel
 from typing import Optional
 
@@ -15,7 +15,6 @@ from glynk.ingestion.pipeline import IngestionPipeline, ContentAlreadyExistsErro
 
 router = APIRouter(tags=["ingest"])
 
-# Will be set during app startup
 _pipeline: Optional[IngestionPipeline] = None
 
 
@@ -25,22 +24,21 @@ def set_pipeline(pipeline: IngestionPipeline):
 
 
 class IngestRequest(BaseModel):
-    source: str  # URL 或本地文件路径
+    source: str
 
 
 @router.post("/ingest")
 async def ingest_url(req: IngestRequest, user: dict = Depends(get_current_user)):
-    """通过 URL 或路径导入内容"""
     if _pipeline is None:
         raise HTTPException(500, "Pipeline not initialized")
 
     try:
         result = await _pipeline.ingest(
             source=req.source,
-            uid=user["uid"],
+            entity_id=user["entity_id"],
         )
         return {
-            "content_id": result.content_id,
+            "content_id": result.unit_id,
             "title": result.title,
             "author": result.author,
             "source_type": result.source_type,
@@ -49,14 +47,15 @@ async def ingest_url(req: IngestRequest, user: dict = Depends(get_current_user))
             "toc": result.toc,
         }
     except ContentAlreadyExistsError as e:
-        c = e.content
+        u = e.unit
+        meta = u.get("metadata") or {} if isinstance(u, dict) else {}
         return {
-            "content_id": c.get("content_id"),
-            "title": c.get("title", ""),
-            "author": c.get("author", ""),
-            "source_type": c.get("source_type", ""),
-            "file_count": c.get("file_count", 0),
-            "total_chars": c.get("total_chars", 0),
+            "content_id": u.get("id", ""),
+            "title": meta.get("title", ""),
+            "author": "",
+            "source_type": meta.get("source_type", ""),
+            "file_count": (u.get("body") or {}).get("file_count", 0),
+            "total_chars": meta.get("total_chars", 0),
             "toc": [],
             "existing": True,
         }
@@ -67,7 +66,6 @@ async def ingest_url(req: IngestRequest, user: dict = Depends(get_current_user))
 @router.post("/ingest/upload")
 async def ingest_file(file: UploadFile = File(...),
                       user: dict = Depends(get_current_user)):
-    """上传文件导入"""
     if _pipeline is None:
         raise HTTPException(500, "Pipeline not initialized")
 
@@ -80,10 +78,10 @@ async def ingest_file(file: UploadFile = File(...),
     try:
         result = await _pipeline.ingest(
             source=Path(tmp.name),
-            uid=user["uid"],
+            entity_id=user["entity_id"],
         )
         return {
-            "content_id": result.content_id,
+            "content_id": result.unit_id,
             "title": result.title,
             "author": result.author,
             "source_type": result.source_type,
@@ -92,14 +90,15 @@ async def ingest_file(file: UploadFile = File(...),
             "toc": result.toc,
         }
     except ContentAlreadyExistsError as e:
-        c = e.content
+        u = e.unit
+        meta = u.get("metadata") or {} if isinstance(u, dict) else {}
         return {
-            "content_id": c.get("content_id"),
-            "title": c.get("title", ""),
-            "author": c.get("author", ""),
-            "source_type": c.get("source_type", ""),
-            "file_count": c.get("file_count", 0),
-            "total_chars": c.get("total_chars", 0),
+            "content_id": u.get("id", ""),
+            "title": meta.get("title", ""),
+            "author": "",
+            "source_type": meta.get("source_type", ""),
+            "file_count": (u.get("body") or {}).get("file_count", 0),
+            "total_chars": meta.get("total_chars", 0),
             "toc": [],
             "existing": True,
         }

@@ -1,7 +1,7 @@
 """
 RetrievalEngine - 语义检索引擎
 
-通过 VectorStore 抽象层搜索，支持众包信号重排序。
+搜索 Units 的 vector 字段，通过 Anchors 关联到目标内容。
 """
 import math
 from uuid import uuid4
@@ -22,70 +22,66 @@ class RetrievalEngine:
         self.embedding_config = embedding_config
 
     async def query(self, request: QueryRequest) -> QueryResponse:
-        # 1. 生成查询向量
         vector = await generate_embedding(request.text, self.embedding_config)
 
-        # 2. 构建过滤条件
         filters = {}
-        if request.types:
-            filters["type"] = request.types
-        if request.content_ids:
-            filters["content_ids"] = request.content_ids
-        if request.uid:
-            filters["uid"] = request.uid
+        if request.roles:
+            filters["roles"] = request.roles
+        if request.unit_ids:
+            filters["unit_ids"] = request.unit_ids
+        if request.entity_id:
+            filters["entity_id"] = request.entity_id
             filters["include_private"] = True
-        if request.version:
-            filters["version"] = request.version
 
-        # 3. 向量搜索
         raw_results = await self.vector_store.search(
             vector=vector, top_k=request.top_k, filters=filters,
         )
 
-        # 4. 补全内容元数据
         results = self._enrich_results(raw_results)
-
-        # 5. 众包信号重排序
         results = self._rerank_with_crowd_signal(results)
 
-        # 6. 记录查询
         query_id = f"qry-{uuid4().hex[:12]}"
-        self.db.create_query(
-            query_id, request.uid,
-            request.user_context,
-            request.text,
-            [r["id"] for r in results],
-        )
 
-        # 7. 构造 browse_url
+        # Log event
+        if request.entity_id:
+            self.db.log_event(
+                event_id=f"evt-{uuid4().hex[:12]}",
+                actor_id=request.entity_id,
+                event_type='search',
+                payload={"query": request.text, "result_count": len(results)},
+            )
+
         for r in results:
-            spans = r.get("anchor", {}).get("spans", [])
-            span_id = spans[0] if spans else ""
+            spans = (r.get("anchor_metadata") or {}).get("spans", [])
+            span_id = r.get("target_span") or (spans[0] if spans else "")
             file_idx = parse_file_idx_from_span(span_id)
-            r["browse_url"] = f"/browse/{r['content_id']}/{file_idx}?loc={span_id}&qid={query_id}"
+            content_id = r.get("content_id", "")
+            r["browse_url"] = f"/read/{content_id}/{file_idx}?loc={span_id}&qid={query_id}"
 
         return QueryResponse(query_id=query_id, results=results)
 
     def _enrich_results(self, raw_results: list[dict]) -> list[dict]:
-        """补全内容元数据（title, author等）"""
         content_cache = {}
         for r in raw_results:
             cid = r.get("content_id")
             if cid and cid not in content_cache:
-                content_cache[cid] = self.db.get_content(cid)
+                content_cache[cid] = self.db.get_unit(cid)
 
             content = content_cache.get(cid, {}) or {}
-            r["content_title"] = content.get("title", "")
-            r["content_author"] = content.get("author", "")
+            meta = content.get("metadata") or {}
+            r["content_title"] = meta.get("title", "")
+            r["content_author"] = content.get("author_name", "")
+            r["text"] = (r.get("body") or {}).get("html", "")
+            r["tags"] = (r.get("metadata") or {}).get("tags", [])
+            r["type"] = r.get("role", "")
+            r["anchor"] = r.get("anchor_metadata") or {}
 
         return raw_results
 
     def _rerank_with_crowd_signal(self, results: list[dict]) -> list[dict]:
-        """用众包信号加权排序"""
         for r in results:
-            spans = r.get("anchor", {}).get("spans", [])
-            span_id = spans[0] if spans else ""
-            crowd = self.db.get_span_crowd_count(span_id) if span_id else 0
+            target_span = r.get("target_span", "")
+            crowd = self.db.get_span_crowd_count(target_span) if target_span else 0
             r["crowd_count"] = crowd
             score = r.get("score", 0) or 0
             r["final_score"] = score * 0.8 + min(math.log(crowd + 1) / 5, 1.0) * 0.2

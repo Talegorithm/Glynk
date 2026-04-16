@@ -1,13 +1,13 @@
 import client from './client';
 import type { ReadContentResponse, OutlineItem, Content, ContentDetail } from '../types/content';
 
-// --- 内容阅读 ---
+// --- Unit reading (replaces /content/* endpoints) ---
 
 export async function readContent(
   contentId: string,
   params?: { from?: string; size?: number; view?: string; lang?: string },
 ): Promise<ReadContentResponse> {
-  const res = await client.get<ReadContentResponse>(`/content/${contentId}/file`, { params });
+  const res = await client.get<ReadContentResponse>(`/units/${contentId}/read`, { params });
   return res.data;
 }
 
@@ -19,32 +19,44 @@ export async function readFile(
   const params: Record<string, string> = {};
   if (fromSpan) params.from = fromSpan;
   if (lang) params.lang = lang;
-  const res = await client.get<ReadContentResponse>(`/content/${contentId}/file`, { params });
+  const res = await client.get<ReadContentResponse>(`/units/${contentId}/read`, { params });
   return res.data;
 }
 
-// --- 内容元数据 ---
+// --- Unit metadata ---
 
 export async function getContentDetail(contentId: string): Promise<ContentDetail> {
-  const res = await client.get<ContentDetail>(`/content/${contentId}`);
+  const res = await client.get<ContentDetail>(`/units/${contentId}`);
   return res.data;
 }
 
 export async function getOutline(contentId: string): Promise<OutlineItem[]> {
-  const res = await client.get<{ outline: OutlineItem[] }>(`/content/${contentId}/outline`);
+  const res = await client.get<{ outline: OutlineItem[] }>(`/units/${contentId}/outline`);
   return res.data.outline;
 }
 
 export async function listContents(limit = 20, offset = 0): Promise<{ contents: Content[]; total: number }> {
-  const res = await client.get<{ contents: Content[]; total: number }>('/contents', { params: { limit, offset } });
+  const res = await client.get<{ contents: Content[]; total: number }>('/units', { params: { limit, offset, origin: 'ingested' } });
   return res.data;
 }
 
-// --- 阅读进度 ---
+export async function createUnit(data: { text: string; metadata?: object }): Promise<{ id: string }> {
+  const res = await client.post<{ id: string }>('/units', data);
+  return res.data;
+}
+
+export async function getAuthoredUnits(limit = 20, offset = 0): Promise<{ contents: Content[]; total: number }> {
+  const res = await client.get<{ contents: Content[]; total: number }>('/units', { 
+    params: { origin: 'authored', author_id: 'me', limit, offset } 
+  });
+  return res.data;
+}
+
+// --- Reading progress ---
 
 export async function getReadingProgress(contentId: string): Promise<{ span_id: string; updated_at: string } | null> {
   try {
-    const res = await client.get<{ span_id: string; updated_at: string }>(`/content/${contentId}/progress`);
+    const res = await client.get<{ span_id: string; updated_at: string }>(`/units/${contentId}/progress`);
     return res.data;
   } catch {
     return null;
@@ -52,17 +64,17 @@ export async function getReadingProgress(contentId: string): Promise<{ span_id: 
 }
 
 export async function saveReadingProgress(contentId: string, spanId: string): Promise<void> {
-  await client.put(`/content/${contentId}/progress`, { span_id: spanId });
+  await client.put(`/units/${contentId}/progress`, { span_id: spanId });
 }
 
-// --- 翻译 ---
+// --- Translation ---
 
 export async function translateFile(contentId: string, fileIdx: number): Promise<{ lang: string; status: string }> {
-  const res = await client.post<{ lang: string; status: string }>(`/content/${contentId}/translate`, { file_idx: fileIdx });
+  const res = await client.post<{ lang: string; status: string }>(`/units/${contentId}/translate`, { file_idx: fileIdx });
   return res.data;
 }
 
-// --- 阅读会话 ---
+// --- Reading sessions ---
 
 export async function startReadingSession(
   contentId: string,
@@ -79,7 +91,6 @@ export async function endReadingSession(
   sessionId: string,
   durationSeconds?: number,
 ): Promise<void> {
-  // 使用 sendBeacon 友好的方式
   await client.put(`/reading-sessions/${sessionId}/end`, {
     duration_seconds: durationSeconds,
   });

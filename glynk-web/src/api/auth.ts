@@ -2,21 +2,21 @@ import client from './client';
 import type { User, RegisterResponse, LoginResponse } from '../types/auth';
 
 export async function register(data: {
-  uid?: string;
+  display_name?: string;
   email?: string;
 }): Promise<RegisterResponse> {
-  const res = await client.post<RegisterResponse>('/users', data);
+  const res = await client.post<RegisterResponse>('/auth/register', data);
   return res.data;
 }
 
 export async function loginByToken(token: string): Promise<LoginResponse> {
-  const res = await client.get<LoginResponse>('/users/me', {
+  const res = await client.get<LoginResponse>('/auth/me', {
     headers: { Authorization: `Bearer ${token}` },
   });
   return res.data;
 }
 
 export async function getMe(): Promise<User> {
-  const res = await client.get<User>('/users/me');
+  const res = await client.get<User>('/auth/me');
   return res.data;
 }

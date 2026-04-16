@@ -1,21 +1,67 @@
 """
 Glynk 数据模型
 
-核心数据类，不含业务逻辑。
+核心：Entity / Unit / Anchor
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 from datetime import datetime
 import json
 
 
-# ===== 摄入相关 =====
+# ===== Core: Entity / Unit / Anchor =====
+
+@dataclass
+class Entity:
+    """参与者（人 / AI）"""
+    id: str
+    kind: str = 'human'          # human | ai
+    state: str = 'active'        # active | dormant | claimed
+    display_name: str = ''
+    bio: str = ''
+    agent_uri: str | None = None
+    inspired_by: str | None = None
+    created_at: datetime | None = None
+
+
+@dataclass
+class Unit:
+    """信息单元"""
+    id: str
+    author_id: str
+    origin: str                  # ingested | authored
+    shape: str = 'flat'          # flat | structured
+    body: dict = field(default_factory=dict)
+    visibility: dict = field(default_factory=lambda: {"type": "public"})
+    metadata: dict = field(default_factory=dict)
+    vector: list[float] | None = None
+    vector_text: str | None = None
+    created_at: datetime | None = None
+
+
+@dataclass
+class Anchor:
+    """锚点：连接两个实体"""
+    id: str
+    source_type: str             # unit | entity
+    source_unit: str | None = None
+    source_entity: str | None = None
+    target_type: str = 'unit'    # unit | span | entity
+    target_unit: str | None = None
+    target_span: str | None = None
+    target_entity: str | None = None
+    role: str = ''               # highlight | hook | note | reaction | like | follow
+    metadata: dict = field(default_factory=dict)
+    created_at: datetime | None = None
+
+
+# ===== Ingestion =====
 
 @dataclass
 class TOCItem:
-    """TOC 条目（目录项）"""
+    """TOC 条目"""
     title: str
     href: str
     level: int = 1
@@ -41,7 +87,7 @@ class TOCItem:
 
 @dataclass
 class ParsedContent:
-    """Handler 的统一输出。HTML + 元数据，一步到位。"""
+    """Handler 的统一输出"""
     raw_html_parts: list[str]
     file_names: list[str] = field(default_factory=list)
     images: dict[str, bytes] = field(default_factory=dict)
@@ -56,80 +102,25 @@ class ParsedContent:
 @dataclass
 class IngestResult:
     """摄入结果"""
-    content_id: str
+    unit_id: str
     title: str
     author: str
+    author_entity_id: str
     source_type: str
     file_count: int
     total_chars: int
     toc: list[dict] = field(default_factory=list)
 
 
-# ===== 内容相关 =====
-
-@dataclass
-class Content:
-    """内容实体"""
-    content_id: str
-    title: str
-    author: str
-    source_type: str
-    source_url: str | None
-    source_file_hash: str
-    file_count: int
-    toc_json: str = "[]"
-    ai_outline_json: str = "[]"
-    abstract: str = ""
-    translations: dict = field(default_factory=dict)
-    uid: str | None = None
-    status: str = "parsing"
-    error_message: str | None = None
-    total_chars: int = 0
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
-
-    def get_toc(self) -> list[dict]:
-        try:
-            return json.loads(self.toc_json)
-        except Exception:
-            return []
-
-    def get_outline(self) -> list[dict]:
-        try:
-            return json.loads(self.ai_outline_json)
-        except Exception:
-            return []
-
-
-# ===== 标注相关 =====
-
-@dataclass
-class Annotation:
-    """统一标注"""
-    id: str
-    content_id: str
-    anchor: dict
-    type: str           # 'highlight' | 'hook' | 'note' | 'reaction'
-    text: str
-    tags: list[str] = field(default_factory=list)
-    contextuality: str = "standalone"
-    source: str = "human"
-    uid: str | None = None
-    visibility: str = "public"
-    query_id: str | None = None
-    version: str | None = None
-    created_at: datetime | None = None
-
+# ===== Retrieval =====
 
 @dataclass
 class QueryRequest:
     """检索请求"""
     text: str
-    user_context: dict | None = None
-    types: list[str] | None = None
-    content_ids: list[str] | None = None
-    uid: str | None = None
-    version: str | None = None
+    roles: list[str] | None = None
+    unit_ids: list[str] | None = None
+    entity_id: str | None = None
     top_k: int = 10
 
 
@@ -140,13 +131,13 @@ class QueryResponse:
     results: list[dict] = field(default_factory=list)
 
 
-# ===== Span 相关 =====
+# ===== Span =====
 
 @dataclass
 class HTMLSpan:
     """HTML Span 元数据"""
     span_id: str
-    content_id: str
+    unit_id: str
     file_name: str
     char_offset: int
     text_preview: str
@@ -155,14 +146,13 @@ class HTMLSpan:
     element_type: str = "p"
 
 
-# ===== 工具函数 =====
+# ===== Utility =====
 
 def parse_span_id(span_id: str) -> dict:
     """
-    解析 span_id 到结构化信息
+    解析 span_id
 
-    格式：{content_id}-{file_idx}-p{n}-s{m}
-    示例：a1b2c3d4e5f6g7h8-1-p5-s2
+    格式：{unit_id}-{file_idx}-p{n}-s{m}
     """
     parts = span_id.split("-")
     if len(parts) != 4:
@@ -185,22 +175,15 @@ def parse_span_id(span_id: str) -> dict:
     }
 
 
-def expand_span_id(span_id: str, content_id: str) -> str:
-    """
-    如果 span_id 缺少 content_id 前缀，补全。
-
-    完整格式: c64b37d42dcc9025-0-p6-s2 (4 parts)
-    短格式:   0-p6-s2 (3 parts, 来自 AI view)
-    """
-    if not span_id or not content_id:
+def expand_span_id(span_id: str, unit_id: str) -> str:
+    """补全短格式 span_id"""
+    if not span_id or not unit_id:
         return span_id
-    # 已经是完整格式
-    if span_id.startswith(content_id):
+    if span_id.startswith(unit_id):
         return span_id
-    # 短格式：file_idx-pN-sM
     parts = span_id.split('-')
     if len(parts) == 3 and parts[1].startswith('p') and parts[2].startswith('s'):
-        return f"{content_id}-{span_id}"
+        return f"{unit_id}-{span_id}"
     return span_id
 
 

@@ -340,9 +340,10 @@ export function removeHighlightById(annotationId: string): void {
 
     if (htmlElement.tagName === 'SPAN') {
       if (htmlElement.hasAttribute('data-highlighted') && htmlElement.parentElement?.id) {
+        const parent = htmlElement.parentNode;
         const textNode = document.createTextNode(htmlElement.textContent || '');
-        htmlElement.parentNode?.replaceChild(textNode, htmlElement);
-        htmlElement.parentElement?.normalize();
+        parent?.replaceChild(textNode, htmlElement);
+        (parent as HTMLElement)?.normalize();
       } else {
         htmlElement.style.backgroundColor = '';
         htmlElement.removeAttribute('data-highlighted');

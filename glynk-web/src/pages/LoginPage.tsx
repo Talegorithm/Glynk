@@ -20,8 +20,8 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const user = await loginByToken(raw);
-      setAuth({ uid: user.uid, token: raw });
-      toast.success(t('login.success', { uid: user.uid }));
+      setAuth({ uid: user.entity_id, token: raw });
+      toast.success(t('login.success', { uid: user.entity_id }));
       navigate('/library');
     } catch {
       toast.error(t('login.error'));

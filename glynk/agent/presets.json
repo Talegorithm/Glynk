@@ -5,5 +5,12 @@
     "temperature": 0.3,
     "skills": ["planning"],
     "description": "官方标注 Agent - 通读内容，生成 AI 大纲和 hooks"
+  },
+  "story_parser": {
+    "system_prompt_file": "story_parser.prompt",
+    "max_iterations": 1000,
+    "temperature": 0.4,
+    "skills": ["planning"],
+    "description": "故事解析 Agent - 从虚构作品中提取 10 类创作者灵感素材"
   }
 }

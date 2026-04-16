@@ -5,6 +5,7 @@ Embedding 生成服务
 从 Resonote 简化，去掉 cache 依赖。
 """
 import logging
+import unicodedata
 from typing import List
 
 from openai import AzureOpenAI
@@ -12,6 +13,33 @@ from openai import AzureOpenAI
 from glynk.config import EmbeddingConfig
 
 logger = logging.getLogger(__name__)
+
+# 字符数阈值：去标点 emoji 后少于此值则不 embed
+MIN_EMBED_CHARS = 30
+
+
+def should_embed(text: str, metadata: dict | None = None) -> bool:
+    """
+    判断一段文本是否值得 embed。
+
+    不 embed 的条件：
+    - metadata.skip_embedding = True（显式标记）
+    - 文本为空
+    - 有效字符（字母/数字/CJK）数 < MIN_EMBED_CHARS
+
+    短回复、纯反应、emoji 串都会被跳过。vector 字段保持 null，未来可补 embed。
+    """
+    if metadata and metadata.get("skip_embedding"):
+        return False
+    if not text or not text.strip():
+        return False
+
+    # 保留字母数字和 CJK 字符，剔除标点、空白、emoji 等
+    meaningful = [
+        c for c in text
+        if c.isalnum() or unicodedata.category(c).startswith("L")
+    ]
+    return len(meaningful) >= MIN_EMBED_CHARS
 
 
 def _create_client(config: EmbeddingConfig) -> AzureOpenAI:

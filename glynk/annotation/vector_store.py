@@ -1,9 +1,9 @@
 """
-VectorStore 协议 + PgVectorStore 实现
+VectorStore - pgvector on units table
 
-pgvector 直接在 annotations 表上做向量搜索。
+搜索有 vector 的 Units（annotation source units）。
 """
-from typing import Protocol, Optional
+from typing import Protocol
 from glynk.storage.postgres import PostgresStore
 
 
@@ -14,50 +14,50 @@ class VectorStore(Protocol):
 
 
 class PgVectorStore:
-    """pgvector 实现。直接在 annotations 表上做向量搜索。"""
+    """pgvector on units table."""
 
     def __init__(self, db: PostgresStore):
         self.db = db
 
     async def search(self, vector: list[float], top_k: int,
                      filters: dict = None) -> list[dict]:
-        conditions = ["embedding IS NOT NULL"]
+        conditions = ["u.vector IS NOT NULL"]
         params = [str(vector)]
 
         if filters:
-            if "type" in filters:
-                types = filters["type"] if isinstance(filters["type"], list) else [filters["type"]]
-                conditions.append(f"type = ANY(%s)")
-                params.append(types)
+            if "roles" in filters:
+                roles = filters["roles"] if isinstance(filters["roles"], list) else [filters["roles"]]
+                conditions.append("u.metadata->>'role' = ANY(%s)")
+                params.append(roles)
 
-            if "content_ids" in filters:
-                conditions.append(f"content_id = ANY(%s)")
-                params.append(filters["content_ids"])
+            if "unit_ids" in filters:
+                # Filter by target_unit through anchors
+                conditions.append("""
+                    u.id IN (SELECT a.source_unit FROM anchors a
+                             WHERE a.target_unit = ANY(%s))
+                """)
+                params.append(filters["unit_ids"])
 
-            if "version" in filters:
-                conditions.append("version = %s")
-                params.append(filters["version"])
-
-            if "uid" in filters and filters.get("include_private"):
-                conditions.append(f"(visibility = 'public' OR uid = %s)")
-                params.append(filters["uid"])
+            if "entity_id" in filters and filters.get("include_private"):
+                conditions.append("(u.visibility->>'type' = 'public' OR u.author_id = %s)")
+                params.append(filters["entity_id"])
             else:
-                conditions.append("visibility = 'public'")
+                conditions.append("u.visibility->>'type' = 'public'")
         else:
-            conditions.append("visibility = 'public'")
+            conditions.append("u.visibility->>'type' = 'public'")
 
-        where = "WHERE " + " AND ".join(conditions) if conditions else ""
+        where = "WHERE " + " AND ".join(conditions)
 
         sql = f"""
-            SELECT id, content_id, type, text, anchor, tags, source, uid,
-                   contextuality, created_at,
-                   1 - (embedding <=> %s::vector) as score
-            FROM annotations
+            SELECT u.id, u.body, u.metadata, u.author_id, u.created_at,
+                   1 - (u.vector <=> %s::vector) as score,
+                   a.target_unit as content_id, a.target_span, a.role, a.metadata as anchor_metadata
+            FROM units u
+            LEFT JOIN anchors a ON a.source_unit = u.id
             {where}
-            ORDER BY embedding <=> %s::vector
+            ORDER BY u.vector <=> %s::vector
             LIMIT {top_k}
         """
-        # The first %s is for score calculation, need to add vector again for ORDER BY
         params.append(str(vector))
 
         return self.db.execute_query(sql, tuple(params))

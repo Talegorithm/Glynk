@@ -128,7 +128,7 @@ export default function LibraryPage() {
               const to = loc ? `/read/${r.content_id}?loc=${loc}` : `/read/${r.content_id}`;
               return (
               <Link
-                key={r.annotation_id}
+                key={r.id}
                 to={to}
                 className="block p-4 md:p-5 rounded-xl glass-panel hover:-translate-y-0.5 transition-transform duration-200"
               >

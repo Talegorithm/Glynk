@@ -4,12 +4,14 @@ import { toast } from 'sonner';
 import { getMyAnnotations, searchMyAnnotations } from '../api/annotation';
 import type { Annotation } from '../types/annotation';
 import { useT } from '../i18n';
+import { getAuthoredUnits } from '../api/content';
+import { DropEditor } from '../components/notes/DropEditor';
 
-type FilterTab = 'all' | 'highlight' | 'note' | 'hook';
+type FilterTab = 'all' | 'highlight' | 'note' | 'hook' | 'idea';
 
 const PAGE_SIZE = 50;
 
-const tabKeys: FilterTab[] = ['all', 'highlight', 'hook', 'note'];
+const tabKeys: FilterTab[] = ['all', 'idea', 'highlight', 'hook', 'note'];
 
 export default function NotesPage() {
   const t = useT();
@@ -29,17 +31,36 @@ export default function NotesPage() {
   const load = useCallback(async (p = 0) => {
     setLoading(true);
     try {
-      const typeParam = filter === 'all' ? undefined : filter;
-      const res = await getMyAnnotations({ type: typeParam, limit: PAGE_SIZE, offset: p * PAGE_SIZE });
-      setAnnotations(res.annotations);
-      setTotal(res.total);
+      if (filter === 'idea') {
+        const res = await getAuthoredUnits(PAGE_SIZE, p * PAGE_SIZE);
+        // Map Content back to Annotation-like shape for display
+        const mappedAnnotations: Annotation[] = res.contents.map((c: any) => ({
+          id: c.content_id,
+          content_id: c.content_id,
+          anchor: {},
+          type: 'idea',
+          text: c.text,
+          tags: [],
+          created_at: c.created_at,
+          visibility: 'public',
+          source: 'human',
+          contextuality: 'standalone'
+        }));
+        setAnnotations(mappedAnnotations);
+        setTotal(res.total);
+      } else {
+        const typeParam = filter === 'all' ? undefined : filter;
+        const res = await getMyAnnotations({ type: typeParam, limit: PAGE_SIZE, offset: p * PAGE_SIZE });
+        setAnnotations(res.annotations);
+        setTotal(res.total);
+      }
       setIsSearch(false);
     } catch {
       toast.error(t('notes.load_error'));
     } finally {
       setLoading(false);
     }
-  }, [filter]);
+  }, [filter, t]);
 
   useEffect(() => {
     setPage(0);
@@ -80,6 +101,7 @@ export default function NotesPage() {
     hook: { label: t('type.hook'), cls: 'bg-purple-100 text-purple-700' },
     note: { label: t('type.note'), cls: 'bg-blue-100 text-blue-700' },
     reaction: { label: t('type.reaction'), cls: 'bg-green-100 text-green-700' },
+    idea: { label: t('type.idea', { defaultValue: 'Idea' }), cls: 'bg-emerald-100 text-emerald-700' },
   };
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -109,6 +131,8 @@ export default function NotesPage() {
         />
       </form>
 
+      <DropEditor onSuccess={() => { if (filter === 'idea' || filter === 'all') load(0); }} />
+
       <div className="flex gap-1 mb-6">
         {tabs.map((tab) => (
           <button
@@ -137,9 +161,13 @@ export default function NotesPage() {
             const anchor = a.anchor as Record<string, unknown>;
             const spans = (anchor?.spans as string[]) || [];
             const firstSpan = spans[0] || '';
-            const linkTo = firstSpan
+            let linkTo = firstSpan
               ? `/read/${a.content_id}?loc=${firstSpan}`
               : `/read/${a.content_id}`;
+              
+            if (a.type === 'idea') {
+              linkTo = '#'; // Ideas are standalone, maybe view in modal later, for now just no-op
+            }
 
             const badge = typeBadge[a.type] || { label: a.type, cls: 'bg-gray-100 text-gray-600' };
 

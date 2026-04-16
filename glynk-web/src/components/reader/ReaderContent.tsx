@@ -7,11 +7,10 @@ import { useEffect, useRef, useState, memo, useLayoutEffect, useCallback } from 
 import { useReaderStore } from '../../store/reader';
 import { CitationPreview } from './CitationPreview';
 import { SelectionToolbar } from './SelectionToolbar';
-import { AnnotationDialog } from './AnnotationDialog';
-import { HighlightMenu } from './HighlightMenu';
+import { ThreadView } from './ThreadView';
 import { getSelectionRange, clearSelection, highlightSpanRange, removeHighlightById } from '../../utils/reader/selection';
 import type { SelectionRange } from '../../utils/reader/selection';
-import { createAnnotation, deleteAnnotation, updateAnnotation, getContentAnnotations } from '../../api/annotation';
+import { createAnnotation, getContentAnnotations } from '../../api/annotation';
 import { saveReadingProgress } from '../../api/content';
 import type { Annotation, TextSelectionAnchor } from '../../types/annotation';
 import type { FileContent } from '../../types/reader';
@@ -131,6 +130,7 @@ interface ReaderContentProps {
 export function ReaderContent({ requestLogin }: ReaderContentProps) {
   const t = useT();
   const token = useAuthStore((state) => state.token);
+  const uid = useAuthStore((state) => state.uid);
   const contentId = useReaderStore((state) => state.contentId);
   const { fontSize, fontFamily } = useReaderSettingsStore();
   const loadedFiles = useReaderStore((state) => state.loadedFiles);
@@ -152,14 +152,8 @@ export function ReaderContent({ requestLogin }: ReaderContentProps) {
   const [citationTarget, setCitationTarget] = useState<string | null>(null);
   const [selectionRange, setSelectionRange] = useState<SelectionRange | null>(null);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
-  const [showAnnotationDialog, setShowAnnotationDialog] = useState(false);
-  const [pendingAnnotation, setPendingAnnotation] = useState<SelectionRange | null>(null);
-  const [highlightMenu, setHighlightMenu] = useState<{
-    annotationId: string;
-    position: { top: number; left: number };
-    hasNote: boolean;
-  } | null>(null);
-  const [editingAnnotation, setEditingAnnotation] = useState<Annotation | null>(null);
+  const [activeThreadSpan, setActiveThreadSpan] = useState<string | null>(null);
+  const [pendingThreadSelection, setPendingThreadSelection] = useState<SelectionRange | null>(null);
 
   // 阅读进度保存（debounce，需要登录）
   const progressTimerRef = useRef<number | null>(null);
@@ -279,19 +273,34 @@ export function ReaderContent({ requestLogin }: ReaderContentProps) {
 
   // 应用高亮样式到 DOM
   useEffect(() => {
-    if (annotations.length === 0) return;
-
     setTimeout(() => {
+      // 1. 先清理已经不存在于 annotations 里的旧高亮 (不包括正在编辑的临时高亮)
+      const currentIds = new Set(annotations.map(a => a.id));
+      document.querySelectorAll('[data-annotation-id]').forEach(el => {
+        const id = el.getAttribute('data-annotation-id');
+        if (id && id !== 'TEMP_THREAD_HIGHLIGHT' && !currentIds.has(id)) {
+          removeHighlightById(id);
+        }
+      });
+
+      if (annotations.length === 0) return;
+
+      // 2. 挂载或更新当前剩余的高亮
       annotations.forEach((annotation) => {
         try {
           // 跳过已应用的
           if (document.querySelectorAll(`[data-annotation-id="${annotation.id}"]`).length > 0) return;
 
           const anchor = annotation.anchor as TextSelectionAnchor;
+          const isMine = !annotation.author_id || annotation.author_id === uid;
+          const isNote = annotation.type === 'note' || annotation.type === 'reply' || annotation.type === 'reply_to';
+          
+          // 自己的标注用原色，别人的强制泛白/幽灵色 (ghost)
+          const colorKey = isMine ? (anchor.color || 'yellow') : 'ghost';
 
           if (anchor.startSpanId && anchor.endSpanId) {
             // 新格式：精确选区高亮
-            const colorConfig = getColorByKey(anchor.color || 'yellow') || DEFAULT_COLOR;
+            const colorConfig = getColorByKey(colorKey as string) || DEFAULT_COLOR;
             highlightSpanRange(
               anchor.startSpanId,
               anchor.endSpanId,
@@ -300,9 +309,9 @@ export function ReaderContent({ requestLogin }: ReaderContentProps) {
               colorConfig.highlight,
               annotation.id
             );
-          } else if (anchor.spans && anchor.spans.length > 0 && anchor.color) {
-            // spans-based 标注（如 agent 创建的 hook）：高亮所有 spans，颜色从 anchor.color 读取
-            const spanColorConfig = getColorByKey(anchor.color as string);
+          } else if (anchor.spans && anchor.spans.length > 0) {
+            // spans-based 标注（如 agent 创建的 hook）：高亮所有 spans
+            const spanColorConfig = getColorByKey(colorKey as string);
             const spanColor = spanColorConfig?.highlight || 'rgba(226, 232, 240, 0.5)';
             anchor.spans.forEach((spanId: string) => {
               const span = document.getElementById(spanId);
@@ -313,49 +322,56 @@ export function ReaderContent({ requestLogin }: ReaderContentProps) {
               span.style.cursor = 'pointer';
             });
           }
+
+          // 无论是不是我的，只要有笔记或是讨论型标注，都挂载 data-has-thread（但未必加下划线）
+          if (isNote || !isMine) {
+            const targetSpanId = annotation.target_span || anchor.startSpanId || (anchor.spans && anchor.spans[0]);
+            if (targetSpanId) {
+               const span = document.getElementById(targetSpanId);
+               if (span && !span.hasAttribute('data-has-thread')) {
+                 span.setAttribute('data-has-thread', 'true');
+                 // 仅仅针对讨论串加上蓝色的虚线下划线做提示，他人的笔记只要高亮本身就能点击
+                 if (annotation.type === 'reply' || annotation.type === 'reply_to') {
+                   span.classList.add('cursor-pointer', 'border-b-2', 'border-dashed', 'border-blue-400', 'hover:bg-blue-50', 'dark:hover:bg-blue-900/30');
+                 }
+               }
+            }
+          }
         } catch {
           // ignore
         }
       });
     }, 100);
-  }, [annotations, loadedFiles]);
+  }, [annotations, loadedFiles, uid]);
 
   // 高亮区域点击事件
   useEffect(() => {
     const handleHighlightClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      const highlightElement = target.closest('[data-annotation-id]') as HTMLElement;
-      if (!highlightElement) return;
+      
+      const annotationId = target.closest('[data-annotation-id]')?.getAttribute('data-annotation-id');
+      let annotation = annotationId ? annotations.find(a => a.id === annotationId) : null;
 
-      e.preventDefault();
-      e.stopPropagation();
-
-      const annotationId = highlightElement.getAttribute('data-annotation-id');
-      if (!annotationId) return;
-
-      const annotation = annotations.find(a => a.id === annotationId);
-      if (!annotation) return;
-
-      const rect = highlightElement.getBoundingClientRect();
-      const menuWidth = 120;
-      let left = rect.left + rect.width / 2 - menuWidth / 2;
-      let top = rect.top - 108;
-
-      if (left < 8) left = 8;
-      if (left + menuWidth > window.innerWidth - 8) left = window.innerWidth - menuWidth - 8;
-      if (top < 8) top = rect.bottom + 8;
-
-      const anchor = annotation.anchor as TextSelectionAnchor;
-      setHighlightMenu({
-        annotationId,
-        position: { top, left },
-        hasNote: !!anchor.note,
-      });
+      // Handle Thread clicks directly hitting the border/span
+      const threadSpan = target.closest('[data-has-thread]') as HTMLElement;
+      
+      if (annotation) {
+        e.preventDefault();
+        e.stopPropagation();
+        const activeSpanId = annotation.target_span || (annotation.anchor as any).startSpanId || (annotation.anchor as any).spans?.[0] || threadSpan?.id || target.id;
+        setActiveThreadSpan(activeSpanId);
+        return;
+      } else if (threadSpan && e.altKey === false) { 
+        e.preventDefault();
+        e.stopPropagation();
+        setActiveThreadSpan(threadSpan.id);
+        return;
+      }
     };
 
     document.addEventListener('click', handleHighlightClick);
     return () => document.removeEventListener('click', handleHighlightClick);
-  }, [annotations]);
+  }, [annotations, uid]);
 
   // IntersectionObserver 双向滚动加载
   useEffect(() => {
@@ -450,96 +466,34 @@ export function ReaderContent({ requestLogin }: ReaderContentProps) {
     setSelectionRange(null);
   };
 
-  const handleAnnotate = () => {
-    if (!selectionRange) return;
+  const handleAnnotate = async () => {
+    if (!selectionRange || !contentId) return;
     if (!token) {
       requestLogin?.();
       return;
     }
-    setPendingAnnotation(selectionRange);
-    setShowAnnotationDialog(true);
+    
+    const range = { ...selectionRange };
+    setPendingThreadSelection(range);
+    setActiveThreadSpan(range.startSpanId);
+    
+    // 立即应用一个带透明度的占位高亮，防止选区消失带来的迷惑感
+    highlightSpanRange(
+      range.startSpanId,
+      range.endSpanId,
+      range.startOffset,
+      range.endOffset,
+      'rgba(255, 237, 160, 0.5)', // default yellow
+      'TEMP_THREAD_HIGHLIGHT'
+    );
+    
     clearSelection();
     setSelectionRange(null);
   };
 
-  const handleSaveAnnotation = async (note: string, colorKey: string) => {
-    if (!contentId) return;
 
-    const colorConfig = getColorByKey(colorKey) || DEFAULT_COLOR;
 
-    try {
-      if (editingAnnotation) {
-        // 编辑现有笔记
-        const existingAnchor = editingAnnotation.anchor as TextSelectionAnchor;
-        await updateAnnotation(editingAnnotation.id, {
-          anchor: { ...existingAnchor, note },
-        });
-        setEditingAnnotation(null);
-      } else if (pendingAnnotation) {
-        // 新建笔记
-        const anchor: TextSelectionAnchor = {
-          type: 'text_selection',
-          spans: pendingAnnotation.spanIds,
-          startSpanId: pendingAnnotation.startSpanId,
-          endSpanId: pendingAnnotation.endSpanId,
-          startOffset: pendingAnnotation.startOffset,
-          endOffset: pendingAnnotation.endOffset,
-          color: colorConfig.key,
-          note,
-        };
 
-        const newAnnotation = await createAnnotation({
-          content_id: contentId,
-          anchor,
-          type: 'highlight',
-          text: pendingAnnotation.text,
-        });
-
-        highlightSpanRange(
-          pendingAnnotation.startSpanId,
-          pendingAnnotation.endSpanId,
-          pendingAnnotation.startOffset,
-          pendingAnnotation.endOffset,
-          colorConfig.highlight,
-          newAnnotation.id
-        );
-
-        setPendingAnnotation(null);
-      }
-
-      await refreshAnnotations();
-    } catch (error) {
-      console.error('保存笔记失败:', error);
-    }
-
-    setShowAnnotationDialog(false);
-  };
-
-  const handleCancelAnnotation = () => {
-    setShowAnnotationDialog(false);
-    setPendingAnnotation(null);
-    setEditingAnnotation(null);
-  };
-
-  const handleDeleteAnnotation = async () => {
-    if (!highlightMenu || !contentId) return;
-
-    try {
-      removeHighlightById(highlightMenu.annotationId);
-      await deleteAnnotation(highlightMenu.annotationId);
-      await refreshAnnotations();
-    } catch (error) {
-      console.error('删除失败:', error);
-    }
-  };
-
-  const handleEditAnnotation = () => {
-    if (!highlightMenu) return;
-    const annotation = annotations.find(a => a.id === highlightMenu.annotationId);
-    if (!annotation) return;
-    setEditingAnnotation(annotation);
-    setShowAnnotationDialog(true);
-  };
 
   const handleCopy = async () => {
     if (!selectionRange) return;
@@ -577,8 +531,6 @@ export function ReaderContent({ requestLogin }: ReaderContentProps) {
   const sortedFiles = Array.from(loadedFiles.entries()).sort((a, b) => a[0] - b[0]);
   console.log('[DEBUG ReaderContent] sortedFiles:', sortedFiles.map(f => ({ fileIdx: f[0], len: f[1].charCount, fromSpan: f[1].fromSpan })));
 
-  const editingAnchor = editingAnnotation?.anchor as TextSelectionAnchor | undefined;
-
   return (
     <div 
       className="reader-content-wrapper relative"
@@ -600,27 +552,29 @@ export function ReaderContent({ requestLogin }: ReaderContentProps) {
         onClose={handleCloseToolbar}
       />
 
-      {showAnnotationDialog && (pendingAnnotation || editingAnnotation) && (
-        <AnnotationDialog
-          selectedText={editingAnnotation?.text || pendingAnnotation?.text || ''}
-          initialNote={editingAnchor?.note}
-          initialColorKey={editingAnchor?.color}
-          isEditing={!!editingAnnotation}
-          onSave={handleSaveAnnotation}
-          onCancel={handleCancelAnnotation}
+      {activeThreadSpan && contentId && (
+        <ThreadView 
+          contentId={contentId} 
+          targetSpan={activeThreadSpan} 
+          pendingSelection={pendingThreadSelection}
+          onClose={() => {
+            setActiveThreadSpan(null);
+            setPendingThreadSelection(null);
+            // 清理可能存在的临时高亮（不管这期间有没有成功创建批注，这里清理都是安全的，因为成功的批注会在下一次刷新被正式高亮）
+            removeHighlightById('TEMP_THREAD_HIGHLIGHT');
+          }} 
+          requestLogin={requestLogin}
+          onThreadUpdated={() => {
+            if (uid) {
+              getContentAnnotations(contentId)
+                .then(setAnnotations)
+                .catch(console.error);
+            }
+          }}
         />
       )}
 
-      {highlightMenu && (
-        <HighlightMenu
-          annotationId={highlightMenu.annotationId}
-          position={highlightMenu.position}
-          hasNote={highlightMenu.hasNote}
-          onDelete={handleDeleteAnnotation}
-          onEdit={handleEditAnnotation}
-          onClose={() => setHighlightMenu(null)}
-        />
-      )}
+      {/* Only ThreadView exists now */}
 
       {/* 顶部哨兵 */}
       <div ref={topSentinelRef} className="h-1" />

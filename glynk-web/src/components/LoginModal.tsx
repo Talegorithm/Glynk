@@ -28,8 +28,8 @@ export function LoginModal({ onClose, hint }: LoginModalProps) {
     setLoading(true);
     try {
       const user = await loginByToken(raw);
-      setAuth({ uid: user.uid, token: raw });
-      toast.success(t('login.success', { uid: user.uid }));
+      setAuth({ uid: user.entity_id, token: raw });
+      toast.success(t('login.success', { uid: user.entity_id }));
       onClose();
     } catch {
       toast.error(t('login.error'));

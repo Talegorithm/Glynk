@@ -1,21 +1,23 @@
 """
-内容 API
+Unit API (replaces content_router)
 
-GET  /content/{content_id}           内容详情
-GET  /content/{content_id}/read      统一阅读接口
-GET  /content/{content_id}/outline   获取AI大纲
-PUT  /content/{content_id}/outline   提交AI大纲
-GET  /content/{content_id}/progress  阅读进度
-PUT  /content/{content_id}/progress  保存阅读进度
-POST /reading-sessions               创建阅读会话
-PUT  /reading-sessions/{id}/end      结束阅读会话
-GET  /contents                       内容列表
+GET  /units/{id}           Unit 详情
+GET  /units/{id}/read      阅读（人 / AI）
+GET  /units/{id}/outline   AI 大纲
+PUT  /units/{id}/outline   提交 AI 大纲
+GET  /units                Unit 列表
+GET  /units/{id}/progress  阅读进度
+PUT  /units/{id}/progress  保存阅读进度
+POST /units/search         语义检索
+POST /units                创建 authored Unit
+POST /reading-sessions     阅读会话
+PUT  /reading-sessions/{id}/end
 """
 import json
 from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from pydantic import BaseModel
-from typing import Optional, Annotated
+from typing import Optional
 
 from glynk.api.auth import get_current_user, get_optional_user
 from glynk.content.reader import ReaderService
@@ -24,9 +26,10 @@ from glynk.storage.postgres import PostgresStore
 from glynk.config import AppConfig
 from glynk.models import expand_span_id
 
-router = APIRouter(tags=["content"])
+router = APIRouter(tags=["units"])
 
 _reader: Optional[ReaderService] = None
+_retrieval_engine = None
 
 
 def set_reader(reader: ReaderService):
@@ -34,25 +37,26 @@ def set_reader(reader: ReaderService):
     _reader = reader
 
 
-@router.get("/content/{content_id}")
-async def get_content_detail(content_id: str):
-    """内容详情（元数据 + TOC）"""
+def set_retrieval_engine(engine):
+    global _retrieval_engine
+    _retrieval_engine = engine
+
+
+# --- Unit detail ---
+
+@router.get("/units/{unit_id}")
+async def get_unit_detail(unit_id: str):
+    """Unit 详情（元数据 + TOC + outline）"""
     db = PostgresStore.get_instance()
-    content = db.get_content(content_id)
-    if not content:
-        raise HTTPException(404, "Content not found")
+    unit = db.get_unit(unit_id)
+    if not unit:
+        raise HTTPException(404, "Unit not found")
 
-    try:
-        toc = json.loads(content.get("toc_json", "[]"))
-    except Exception:
-        toc = []
+    body = unit.get("body") or {}
+    metadata = unit.get("metadata") or {}
+    toc = body.get("toc", [])
+    outline_raw = metadata.get("ai_outline", [])
 
-    try:
-        outline_raw = json.loads(content.get("ai_outline_json", "[]"))
-    except Exception:
-        outline_raw = []
-
-    # 统一 outline 字段名：agent 存 span_id，前端期望 location
     def normalize_outline(items: list) -> list:
         for item in items:
             if "span_id" in item and "location" not in item:
@@ -61,52 +65,55 @@ async def get_content_detail(content_id: str):
                 normalize_outline(item["children"])
         return items
 
-    outline = normalize_outline(outline_raw)
+    outline = normalize_outline(outline_raw) if outline_raw else []
 
     return {
-        "content_id": content["content_id"],
-        "title": content.get("title", ""),
-        "author": content.get("author", ""),
-        "source_type": content.get("source_type", ""),
-        "source_url": content.get("source_url"),
-        "file_count": content.get("file_count", 0),
-        "total_chars": content.get("total_chars", 0),
-        "abstract": content.get("abstract", ""),
-        "language": content.get("language"),
+        "content_id": unit["id"],
+        "title": metadata.get("title", ""),
+        "author": unit.get("author_name", ""),
+        "source_type": metadata.get("source_type", ""),
+        "source_url": metadata.get("source_url"),
+        "file_count": body.get("file_count", 0),
+        "total_chars": metadata.get("total_chars", 0),
+        "abstract": metadata.get("abstract", ""),
+        "language": metadata.get("language"),
         "toc": toc,
         "outline": outline,
-        "created_at": content.get("created_at"),
+        "created_at": unit.get("created_at"),
     }
 
 
-@router.get("/content/{content_id}/file")
-async def read_file(
+# --- Read (file / chunk) ---
+
+@router.get("/units/{unit_id}/read")
+async def read_unit(
     request: Request,
-    content_id: str,
+    unit_id: str,
+    size: int = None,
     lang: str = None,
     user: dict = Depends(get_optional_user),
 ):
-    """人类阅读：加载完整文件"""
+    """读取 Unit 内容（不传 size = 整文件，传 size = AI chunk）"""
     if _reader is None:
         raise HTTPException(500, "Reader not initialized")
 
     from_span = request.query_params.get("from")
     if from_span:
-        from_span = expand_span_id(from_span, content_id)
-    # optionally support explicit file_idx
+        from_span = expand_span_id(from_span, unit_id)
     file_idx_str = request.query_params.get("file_idx")
     file_idx = int(file_idx_str) if file_idx_str and file_idx_str.isdigit() else None
-    
-    uid = user["uid"] if user else None
+    entity_id = user["entity_id"] if user else None
 
     try:
-        response = _reader.read_file(
-            content_id=content_id,
-            file_idx=file_idx,
-            from_span=from_span,
-            lang=lang,
-            uid=uid,
-        )
+        if size:
+            response = _reader.read_chunk(
+                content_id=unit_id, from_span=from_span, size=size, entity_id=entity_id,
+            )
+        else:
+            response = _reader.read_file(
+                content_id=unit_id, file_idx=file_idx, from_span=from_span,
+                lang=lang, entity_id=entity_id,
+            )
         return {
             "content": response.content,
             "from": response.from_span,
@@ -121,22 +128,22 @@ async def read_file(
         raise HTTPException(404, str(e))
 
 
+# --- Translate ---
+
 class TranslateRequest(BaseModel):
     file_idx: int
 
 
-@router.post("/content/{content_id}/translate")
-async def translate_file_endpoint(content_id: str, req: TranslateRequest,
+@router.post("/units/{unit_id}/translate")
+async def translate_file_endpoint(unit_id: str, req: TranslateRequest,
                                   user: dict = Depends(get_current_user)):
-    """翻译指定文件，目标语言取用户偏好"""
     config = AppConfig.from_env()
     db = PostgresStore.get_instance()
-    # 读取用户偏好语言
-    user_row = db.get_user_by_uid(user["uid"])
-    target_lang = user_row.get("preferred_lang") if user_row else None
+    auth = db.get_auth_by_entity(user["entity_id"])
+    target_lang = None  # could store preferred_lang in entity metadata
     try:
         lang_code, status = translate_file_on_disk(
-            config.storage.html_root, content_id, req.file_idx, target_lang, db
+            config.storage.html_root, unit_id, req.file_idx, target_lang, db
         )
         return {"lang": lang_code, "status": status}
     except FileNotFoundError as e:
@@ -145,57 +152,18 @@ async def translate_file_endpoint(content_id: str, req: TranslateRequest,
         raise HTTPException(500, f"Translation failed: {e}")
 
 
-@router.get("/content/{content_id}/chunk")
-async def read_chunk(
-    request: Request,
-    content_id: str,
-    size: int = Query(..., gt=0),
-    user: dict = Depends(get_optional_user),
-):
-    """AI阅读：获取精简HTML切片"""
-    if _reader is None:
-        raise HTTPException(500, "Reader not initialized")
+# --- Outline ---
 
-    from_span = request.query_params.get("from")
-    if from_span:
-        from_span = expand_span_id(from_span, content_id)
-    uid = user["uid"] if user else None
-
-    try:
-        response = _reader.read_chunk(
-            content_id=content_id,
-            from_span=from_span,
-            size=size,
-            uid=uid,
-        )
-        return {
-            "content": response.content,
-            "from": response.from_span,
-            "to": response.to_span,
-            "char_count": response.char_count,
-            "has_more": response.has_more,
-            "next_from": response.next_from,
-            "translation_status": response.translation_status,
-            "annotations": response.annotations,
-        }
-    except ValueError as e:
-        raise HTTPException(404, str(e))
-
-
-@router.get("/content/{content_id}/outline")
-async def get_outline(content_id: str):
-    """获取AI大纲"""
+@router.get("/units/{unit_id}/outline")
+async def get_outline(unit_id: str):
     db = PostgresStore.get_instance()
-    content = db.get_content(content_id)
-    if not content:
-        raise HTTPException(404, "Content not found")
+    unit = db.get_unit(unit_id)
+    if not unit:
+        raise HTTPException(404, "Unit not found")
 
-    try:
-        outline = json.loads(content.get("ai_outline_json", "[]"))
-    except Exception:
-        outline = []
+    metadata = unit.get("metadata") or {}
+    outline = metadata.get("ai_outline", [])
 
-    # 统一字段名
     def normalize(items: list) -> list:
         for item in items:
             if "span_id" in item and "location" not in item:
@@ -204,36 +172,126 @@ async def get_outline(content_id: str):
                 normalize(item["children"])
         return items
 
-    return {"outline": normalize(outline)}
+    return {"outline": normalize(outline) if outline else []}
 
 
 class OutlineRequest(BaseModel):
     outline: list
 
 
-@router.put("/content/{content_id}/outline")
-async def update_outline(content_id: str, req: OutlineRequest,
+@router.put("/units/{unit_id}/outline")
+async def update_outline(unit_id: str, req: OutlineRequest,
                          user: dict = Depends(get_current_user)):
-    """提交AI大纲"""
     db = PostgresStore.get_instance()
-    content = db.get_content(content_id)
-    if not content:
-        raise HTTPException(404, "Content not found")
+    unit = db.get_unit(unit_id)
+    if not unit:
+        raise HTTPException(404, "Unit not found")
 
-    db.update_content_outline(content_id, json.dumps(req.outline, ensure_ascii=False))
+    db.update_unit_metadata_key(unit_id, "ai_outline", req.outline)
     return {"ok": True}
 
 
-@router.get("/contents")
-async def list_contents(
+# --- List Units ---
+
+@router.get("/units")
+async def list_units(
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
+    origin: str = None,
+    author_id: str = None,
+    user: dict = Depends(get_optional_user),
 ):
-    """内容列表"""
     db = PostgresStore.get_instance()
-    contents = db.list_contents(limit=limit, offset=offset)
-    total = db.count_contents()
+    
+    # Map author_id="me" to current user's entity_id
+    if author_id == "me":
+        if not user:
+            raise HTTPException(401, "Authentication required to use author_id=me")
+        author_id = user["entity_id"]
+        
+    units = db.list_units(origin=origin, author_id=author_id, limit=limit, offset=offset)
+    total = db.count_units(origin=origin, author_id=author_id)
+
+    # Format for frontend compatibility
+    contents = []
+    for u in units:
+        meta = u.get("metadata") or {}
+        body = u.get("body") or {}
+        contents.append({
+            "content_id": u["id"],
+            "title": meta.get("title", ""),
+            "author": u.get("author_name", ""),
+            "source_type": meta.get("source_type", ""),
+            "source_url": meta.get("source_url"),
+            "file_count": body.get("file_count", 0),
+            "total_chars": meta.get("total_chars", 0),
+            "abstract": meta.get("abstract", ""),
+            "text": body.get("html", ""), # Add text for authored units
+            "created_at": u.get("created_at"),
+        })
+
     return {"contents": contents, "total": total}
+
+
+# --- Create authored Unit ---
+
+class CreateUnitRequest(BaseModel):
+    text: str
+    metadata: dict = {}
+
+
+@router.post("/units", status_code=201)
+async def create_unit(req: CreateUnitRequest, user: dict = Depends(get_current_user)):
+    """创建 authored Unit（放下想法）。文本足够长时自动生成 embedding。"""
+    from glynk.embedding.service import generate_embedding, should_embed
+
+    db = PostgresStore.get_instance()
+    unit_id = f"u-{uuid4().hex[:12]}"
+
+    vector = None
+    vector_text = None
+    if should_embed(req.text, req.metadata):
+        cfg = AppConfig.from_env()
+        vector = await generate_embedding(req.text, cfg.embedding)
+        vector_text = req.text
+
+    db.create_unit(
+        unit_id=unit_id,
+        author_id=user["entity_id"],
+        origin='authored',
+        shape='flat',
+        body={"html": req.text},
+        metadata=req.metadata,
+        vector=vector,
+        vector_text=vector_text,
+    )
+    return {"id": unit_id}
+
+
+# --- Search ---
+
+class SearchRequest(BaseModel):
+    text: str
+    types: list[str] | None = None
+    content_ids: list[str] | None = None
+    top_k: int = 10
+
+
+@router.post("/units/search")
+async def search_units(req: SearchRequest, user: dict = Depends(get_optional_user)):
+    if _retrieval_engine is None:
+        raise HTTPException(500, "Service not initialized")
+
+    from glynk.models import QueryRequest
+    query = QueryRequest(
+        text=req.text,
+        roles=req.types or ["highlight", "hook"],
+        unit_ids=req.content_ids,
+        entity_id=user["entity_id"] if user else None,
+        top_k=req.top_k,
+    )
+    response = await _retrieval_engine.query(query)
+    return {"query_id": response.query_id, "results": response.results}
 
 
 # --- Reading Progress ---
@@ -242,22 +300,20 @@ class ProgressRequest(BaseModel):
     span_id: str
 
 
-@router.get("/content/{content_id}/progress")
-async def get_progress(content_id: str, user: dict = Depends(get_current_user)):
-    """获取阅读进度"""
+@router.get("/units/{unit_id}/progress")
+async def get_progress(unit_id: str, user: dict = Depends(get_current_user)):
     db = PostgresStore.get_instance()
-    progress = db.get_reading_progress(user["uid"], content_id)
+    progress = db.get_reading_progress(user["entity_id"], unit_id)
     if not progress:
-        raise HTTPException(404, "No reading progress")
+        return None
     return progress
 
 
-@router.put("/content/{content_id}/progress")
-async def save_progress(content_id: str, req: ProgressRequest,
+@router.put("/units/{unit_id}/progress")
+async def save_progress(unit_id: str, req: ProgressRequest,
                         user: dict = Depends(get_current_user)):
-    """保存阅读进度"""
     db = PostgresStore.get_instance()
-    db.upsert_reading_progress(user["uid"], content_id, req.span_id)
+    db.upsert_reading_progress(user["entity_id"], unit_id, req.span_id)
     return {"ok": True}
 
 
@@ -275,17 +331,15 @@ class SessionEndRequest(BaseModel):
 @router.post("/reading-sessions", status_code=201)
 async def start_session(req: SessionStartRequest,
                         user: dict = Depends(get_current_user)):
-    """开始阅读会话"""
     db = PostgresStore.get_instance()
     session_id = f"rs-{uuid4().hex[:12]}"
-    db.create_reading_session(session_id, user["uid"], req.content_id, req.source)
+    db.create_reading_session(session_id, user["entity_id"], req.content_id, req.source)
     return {"session_id": session_id}
 
 
 @router.api_route("/reading-sessions/{session_id}/end", methods=["PUT", "POST"])
 async def end_session(session_id: str, req: SessionEndRequest,
                       user: dict = Depends(get_optional_user)):
-    """结束阅读会话"""
     db = PostgresStore.get_instance()
     db.end_reading_session(session_id, req.duration_seconds)
     return {"ok": True}

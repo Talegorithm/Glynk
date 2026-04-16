@@ -1,7 +1,7 @@
 """
 IngestionPipeline - 摄入流水线
 
-结构化处理：parse → HTML标准化 → 保存。不跑LLM。
+结构化处理：parse -> HTML标准化 -> 保存为 Unit。不跑LLM。
 """
 import hashlib
 import json
@@ -9,12 +9,13 @@ import tempfile
 from pathlib import Path
 from urllib.parse import urlparse
 from typing import Union
+from uuid import uuid4
 import logging
 
 from bs4 import BeautifulSoup
 
 from glynk.config import AppConfig
-from glynk.models import Content, IngestResult, ParsedContent, TOCItem
+from glynk.models import IngestResult, ParsedContent, TOCItem
 from glynk.ingestion.registry import HandlerRegistry
 from glynk.ingestion.processing.html_processor import HTMLProcessor
 
@@ -22,9 +23,9 @@ logger = logging.getLogger(__name__)
 
 
 class ContentAlreadyExistsError(Exception):
-    def __init__(self, content: dict):
-        self.content = content
-        super().__init__(f"Content already exists: {content.get('content_id')}")
+    def __init__(self, unit: dict):
+        self.unit = unit
+        super().__init__(f"Content already exists: {unit.get('id')}")
 
 
 class IngestionPipeline:
@@ -37,11 +38,10 @@ class IngestionPipeline:
 
     @staticmethod
     def _normalize_url(url: str) -> str:
-        """归一化 URL：去掉 fragment、tracking 参数、排序剩余参数"""
+        """归一化 URL"""
         from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
         parsed = urlparse(url)
         params = parse_qs(parsed.query, keep_blank_values=False)
-        # 去掉常见 tracking 参数
         tracking_keys = {
             'mpshare', 'scene', 'srcid', 'sharer_shareinfo',
             'sharer_shareinfo_first', 'share_token', 'from', 'isappinstalled',
@@ -52,24 +52,42 @@ class IngestionPipeline:
         sorted_query = urlencode(cleaned, doseq=True)
         return urlunparse((parsed.scheme, parsed.netloc, parsed.path, '', sorted_query, ''))
 
-    async def ingest(self, source: Union[str, Path], uid: str = None,
+    def _get_or_create_author_entity(self, author_name: str) -> str:
+        """为内容作者创建 dormant Entity（去重：同名复用同一个）"""
+        if not author_name:
+            author_name = "Unknown"
+
+        existing = self.db.find_entity_by_name(author_name, state='dormant')
+        if existing:
+            return existing['id']
+
+        entity_id = f"ent-{uuid4().hex[:12]}"
+        self.db.create_entity(
+            entity_id=entity_id,
+            kind='human',
+            state='dormant',
+            display_name=author_name,
+        )
+        return entity_id
+
+    async def ingest(self, source: Union[str, Path], entity_id: str = None,
                      content_type: str = None,
                      source_hint: str = "") -> IngestResult:
         """
-        摄入内容。
+        摄入内容，产出 Unit(origin=ingested, shape=structured)。
 
         Args:
             source: URL字符串 或 本地文件Path
-            uid: 提交者uid
+            entity_id: 提交者 entity_id（imported_by）
             content_type: 明确指定内容类型
-            source_hint: 来源提示（如 'arxiv.org'）
+            source_hint: 来源提示
         """
-        # 1. URL 去重（在下载前检查）
+        # 1. URL 去重
         source_url = None
         if isinstance(source, str) and source.startswith('http'):
             source_url = source
             normalized = self._normalize_url(source)
-            existing_by_url = self.db.get_content_by_source_url(normalized)
+            existing_by_url = self.db.get_unit_by_source_url(normalized)
             if existing_by_url:
                 raise ContentAlreadyExistsError(existing_by_url)
 
@@ -78,77 +96,82 @@ class IngestionPipeline:
         if not source_hint and source_url:
             source_hint = urlparse(source_url).netloc
 
-        # 3. 计算 content_id + file hash 去重
+        # 3. 计算 unit_id + 去重
         file_hash = self._calculate_file_hash(file_path)
-        content_id = file_hash[:16]
-        existing = self.db.get_content(content_id)
+        unit_id = file_hash[:16]
+        existing = self.db.get_unit(unit_id)
         if existing:
-            # 允许覆盖：total_chars < 3000 且同 uid（或旧记录无 uid）
-            old_chars = existing.get('total_chars', 0) or 0
-            old_uid = existing.get('uid') or ''
-            if old_chars < 3000 and (not old_uid or old_uid == uid):
-                logger.info(f"Overwriting content {content_id} (old chars={old_chars}, uid={old_uid})")
-                self.db.delete_content(content_id)
-                # 清理磁盘
-                old_html_root = self.config.storage.html_root / content_id
+            old_chars = (existing.get('metadata') or {}).get('total_chars', 0) or 0
+            old_imported_by = (existing.get('metadata') or {}).get('imported_by', '')
+            if old_chars < 3000 and (not old_imported_by or old_imported_by == entity_id):
+                logger.info(f"Overwriting unit {unit_id} (old chars={old_chars})")
+                self.db.delete_unit(unit_id)
+                old_html_root = self.config.storage.html_root / unit_id
                 if old_html_root.exists():
                     import shutil
                     shutil.rmtree(old_html_root, ignore_errors=True)
             else:
                 raise ContentAlreadyExistsError(existing)
 
-        # 3. 选择 handler，解析
+        # 4. 选择 handler，解析
         handler = self.registry.resolve(file_path, content_type, source_hint)
         parsed = handler.parse(file_path)
 
-        # 4. HTML 标准化
+        # 5. HTML 标准化
         processed_files = []
         total_chars = 0
-        html_root = self.config.storage.html_root / content_id
+        html_root = self.config.storage.html_root / unit_id
         html_root.mkdir(parents=True, exist_ok=True)
 
         for file_idx, raw_html in enumerate(parsed.raw_html_parts):
-            processor = HTMLProcessor(content_id, file_idx)
+            processor = HTMLProcessor(unit_id, file_idx)
             result = processor.process(raw_html, parsed.images)
             processed_files.append(result)
 
-            # 保存 HTML
             html_file = html_root / f"{file_idx}.html"
             html_file.write_text(result.html, encoding='utf-8')
 
-            # 保存图片
             for img_name, img_data in result.images.items():
                 img_path = html_root / img_name
                 img_path.write_bytes(img_data)
 
-            total_chars += result.sentence_count * 50  # 估算
+            total_chars += result.sentence_count * 50
 
-        # 5. 保存 TOC — 将 EPUB href 映射为 span_id
+        # 6. TOC mapping
         toc_list = [item.to_dict() for item in parsed.toc] if parsed.toc else []
         if toc_list and parsed.file_names:
-            self._map_toc_to_span_ids(toc_list, parsed.file_names, content_id, html_root)
+            self._map_toc_to_span_ids(toc_list, parsed.file_names, unit_id, html_root)
 
-        # 6. 保存到数据库
-        content = Content(
-            content_id=content_id,
-            title=parsed.title,
-            author=parsed.author,
-            source_type=parsed.content_type,
-            source_url=source if isinstance(source, str) and source.startswith('http') else None,
-            source_file_hash=file_hash,
-            file_count=len(processed_files),
-            toc_json=json.dumps(toc_list, ensure_ascii=False),
-            abstract=parsed.abstract,
-            uid=uid,
-            status='ready',
-            total_chars=total_chars,
+        # 7. 创建作者 Entity（dormant）
+        author_entity_id = self._get_or_create_author_entity(parsed.author)
+
+        # 8. 保存 Unit
+        self.db.create_unit(
+            unit_id=unit_id,
+            author_id=author_entity_id,
+            origin='ingested',
+            shape='structured',
+            body={
+                "toc": toc_list,
+                "file_count": len(processed_files),
+            },
+            metadata={
+                "title": parsed.title,
+                "abstract": parsed.abstract,
+                "source_type": parsed.content_type,
+                "source_url": source if isinstance(source, str) and source.startswith('http') else None,
+                "source_file_hash": file_hash,
+                "total_chars": total_chars,
+                "imported_by": entity_id,
+                "status": "ready",
+            },
         )
-        self.db.create_content(content)
 
         return IngestResult(
-            content_id=content_id,
+            unit_id=unit_id,
             title=parsed.title,
             author=parsed.author,
+            author_entity_id=author_entity_id,
             source_type=parsed.content_type,
             file_count=len(processed_files),
             total_chars=total_chars,
@@ -156,7 +179,6 @@ class IngestionPipeline:
         )
 
     async def _resolve_source(self, source: Union[str, Path]) -> Path:
-        """URL 则下载到临时目录，本地文件直接返回"""
         if isinstance(source, Path):
             return source
         if isinstance(source, str) and source.startswith('http'):
@@ -169,21 +191,14 @@ class IngestionPipeline:
         return Path(source)
 
     def _map_toc_to_span_ids(self, toc_list: list[dict], file_names: list[str],
-                                content_id: str, html_root: Path):
-        """
-        将 TOC 中的 EPUB href 映射为 span_id（参照 Resonote _map_toc_to_span_ids）。
-
-        file_names: EPUB 原始文件名列表，与 0.html, 1.html... 一一对应
-        """
-        # 建立映射：原始文件名 → file_idx
+                              unit_id: str, html_root: Path):
+        """将 TOC EPUB href 映射为 span_id"""
         name_to_idx = {}
         for idx, name in enumerate(file_names):
             name_to_idx[name] = idx
-            # 也支持不带路径前缀的匹配
             base = name.split('/')[-1]
             name_to_idx[base] = idx
 
-        # 建立映射：file_idx → 首个 span_id
         file_first_span = {}
         for idx in range(len(file_names)):
             html_file = html_root / f"{idx}.html"
@@ -196,16 +211,12 @@ class IngestionPipeline:
                 file_first_span[idx] = first.get('id')
 
         def resolve_href(href: str) -> str:
-            """将 EPUB href 解析为 span_id"""
             if not href:
                 return ""
-
-            # 分离文件名和锚点
             parts = href.split('#', 1)
             file_ref = parts[0]
             anchor = parts[1] if len(parts) > 1 else None
 
-            # 查找 file_idx
             file_idx = None
             base_ref = file_ref.split('/')[-1]
             if file_ref in name_to_idx:
@@ -216,7 +227,6 @@ class IngestionPipeline:
             if file_idx is None:
                 return ""
 
-            # 如果有锚点，尝试在 HTML 中找到对应元素的 span_id
             if anchor:
                 html_file = html_root / f"{file_idx}.html"
                 if html_file.exists():
@@ -224,21 +234,18 @@ class IngestionPipeline:
                     soup = BeautifulSoup(html, 'html.parser')
                     target = soup.find(id=anchor)
                     if target:
-                        # 找这个元素内或之后的第一个 span[id]
                         span = target.find('span', id=True) if target.name != 'span' else target
                         if not span and target.get('id'):
                             span = target.find_next('span', id=True)
                         if span and span.get('id'):
                             return span.get('id')
 
-            # fallback: 返回该文件的首个 span_id
             return file_first_span.get(file_idx, "")
 
         def process_toc_items(items: list[dict], depth: int = 1):
             for item in items:
                 item['level'] = depth
                 item['href'] = resolve_href(item.get('href', ''))
-                # 如果 href 为空，尝试 fallback 到第一个子项
                 if not item['href'] and item.get('children'):
                     for child in item['children']:
                         child_href = resolve_href(child.get('href', ''))

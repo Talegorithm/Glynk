@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 interface AuthState {
-  uid: string | null;
+  uid: string | null;      // entity_id (kept as 'uid' to minimize store migration)
   token: string | null;
   preferredLang: string;
   setAuth: (data: { uid: string; token: string }) => void;

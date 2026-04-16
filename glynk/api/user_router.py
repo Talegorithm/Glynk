@@ -1,21 +1,22 @@
 """
-用户管理 API
+Auth API
 
-POST /users            注册（一键，uid 自动生成）
-GET  /users/me         当前用户信息
+POST /auth/register    注册 -> Entity + auth record
+GET  /auth/me          当前用户 Entity
 """
 import secrets
+from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 
 from glynk.api.auth import get_current_user
 from glynk.storage.postgres import PostgresStore
 
-router = APIRouter(prefix="/users", tags=["users"])
+router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-def _generate_uid() -> str:
-    return f"u-{secrets.token_hex(4)}"
+def _generate_entity_id() -> str:
+    return f"ent-{uuid4().hex[:12]}"
 
 
 def _generate_token() -> str:
@@ -23,56 +24,43 @@ def _generate_token() -> str:
 
 
 class RegisterRequest(BaseModel):
-    uid: str = ""      # 选填，不填自动生成
-    email: str = ""    # 选填
+    display_name: str = ""
+    email: str = ""
 
 
-@router.post("")
+@router.post("/register")
 async def register(req: RegisterRequest):
-    """注册：拿 token"""
+    """注册：创建 Entity + auth record"""
     db = PostgresStore.get_instance()
 
-    uid = req.uid.strip().lower() if req.uid else _generate_uid()
-
-    if req.uid and db.get_user_by_uid(uid):
-        raise HTTPException(409, "uid 已被占用")
-
-    # 自动生成的 uid 冲突极低，但保险起见
-    while db.get_user_by_uid(uid):
-        uid = _generate_uid()
-
-    if req.email and db.get_user_by_email(req.email):
+    if req.email and db.get_auth_by_email(req.email):
         raise HTTPException(409, "该邮箱已注册")
 
-    token = _generate_token()
-    email = req.email or f"{uid}@placeholder.glynk"
-    db.create_user(uid, token, email)
+    entity_id = _generate_entity_id()
+    while db.get_entity(entity_id):
+        entity_id = _generate_entity_id()
 
-    return {"uid": uid, "token": token}
+    db.create_entity(
+        entity_id=entity_id,
+        kind='human',
+        state='active',
+        display_name=req.display_name or entity_id,
+    )
+
+    token = _generate_token()
+    email = req.email or f"{entity_id}@placeholder.glynk"
+    db.create_auth(entity_id, token, email)
+
+    return {"entity_id": entity_id, "token": token}
 
 
 @router.get("/me")
 async def get_me(user: dict = Depends(get_current_user)):
     return {
-        "uid": user["uid"],
+        "entity_id": user["entity_id"],
+        "display_name": user.get("display_name", ""),
         "email": user.get("email", ""),
-        "preferred_lang": user.get("preferred_lang", "zh"),
+        "kind": user.get("kind", "human"),
+        "state": user.get("state", "active"),
         "created_at": user.get("created_at"),
     }
-
-
-class UpdatePreferencesRequest(BaseModel):
-    preferred_lang: str | None = None
-
-
-@router.patch("/me/preferences")
-async def update_preferences(req: UpdatePreferencesRequest,
-                             user: dict = Depends(get_current_user)):
-    """更新用户偏好"""
-    db = PostgresStore.get_instance()
-    if req.preferred_lang:
-        db._execute(
-            "UPDATE users SET preferred_lang = %s WHERE uid = %s",
-            (req.preferred_lang, user["uid"]),
-        )
-    return {"ok": True}

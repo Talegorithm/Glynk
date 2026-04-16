@@ -90,6 +90,19 @@ const zh: Record<string, string> = {
   'notes.count': '{count} 条',
   'notes.prev': '上一页',
   'notes.next': '下一页',
+  'notes.tab.idea': '想法',
+  'notes.drop_placeholder': '随手记下一个想法或灵感... (Cmd+Enter 提交)',
+  'notes.drop_submit': '放下',
+  'notes.drop_success': '已成功放下',
+  'notes.drop_error': '提交失败，请重试',
+
+  // Thread
+  'thread.title': '讨论',
+  'thread.empty': '暂无讨论。来说点什么吧！',
+  'thread.replying_to': '回复层内...',
+  'thread.placeholder': '加入讨论...',
+  'thread.submit': '回复',
+  'thread.cancel': '取消',
 
   // Reader
   'reader.loading': '加载中...',
@@ -136,6 +149,7 @@ const zh: Record<string, string> = {
   'selection.copy': '复制',
   'selection.close': '关闭',
   'selection.color': '选择颜色',
+  'selection.reply': '回复',
 
   // Citation
   'citation.preview': '引注预览',
@@ -152,6 +166,7 @@ const zh: Record<string, string> = {
   'type.hook': 'Hook',
   'type.note': '笔记',
   'type.reaction': '反应',
+  'type.idea': '想法',
 };
 
 const en: Record<string, string> = {
@@ -244,6 +259,19 @@ const en: Record<string, string> = {
   'notes.count': '{count}',
   'notes.prev': 'Previous',
   'notes.next': 'Next',
+  'notes.tab.idea': 'Ideas',
+  'notes.drop_placeholder': 'Write down an idea or note... (Cmd+Enter to save)',
+  'notes.drop_submit': 'Drop',
+  'notes.drop_success': 'Idea dropped successfully',
+  'notes.drop_error': 'Failed to drop idea',
+
+  // Thread
+  'thread.title': 'Discussions',
+  'thread.empty': 'No discussions yet. Be the first!',
+  'thread.replying_to': 'Replying to comment...',
+  'thread.placeholder': 'Join the discussion...',
+  'thread.submit': 'Reply',
+  'thread.cancel': 'Cancel',
 
   // Reader
   'reader.loading': 'Loading...',
@@ -290,6 +318,7 @@ const en: Record<string, string> = {
   'selection.copy': 'Copy',
   'selection.close': 'Close',
   'selection.color': 'Pick color',
+  'selection.reply': 'Discuss',
 
   // Citation
   'citation.preview': 'Citation Preview',
@@ -306,6 +335,7 @@ const en: Record<string, string> = {
   'type.hook': 'Hook',
   'type.note': 'Note',
   'type.reaction': 'Reaction',
+  'type.idea': 'Idea',
 };
 
 const translations: Record<string, Record<string, string>> = { zh, en };
@@ -319,10 +349,12 @@ export function useT() {
   const dict = translations[lang] || translations.zh;
 
   return (key: string, params?: Record<string, string | number>): string => {
-    let text = dict[key] ?? translations.zh[key] ?? key;
+    let text = dict[key] ?? translations.zh[key] ?? (params?.defaultValue ? String(params.defaultValue) : key);
     if (params) {
       for (const [k, v] of Object.entries(params)) {
-        text = text.replace(`{${k}}`, String(v));
+        if (k !== 'defaultValue') {
+          text = text.replace(`{${k}}`, String(v));
+        }
       }
     }
     return text;

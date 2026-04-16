@@ -43,7 +43,7 @@ class ReaderService:
         self.db = db
 
     def read_file(self, content_id: str, file_idx: int = None, from_span: str = None,
-                  lang: str = None, uid: str = None) -> ReadResponse:
+                  lang: str = None, entity_id: str = None) -> ReadResponse:
         """加载完整文件（前端阅读器使用）"""
         if file_idx is None:
             if from_span:
@@ -85,7 +85,7 @@ class ReaderService:
             else:
                 translation_status = "not_available"
 
-        annotations = self.db.get_annotations(content_id, uid=uid) if self.db else []
+        annotations = self.db.get_anchors_for_unit(content_id, entity_id=entity_id) if self.db else []
 
         return ReadResponse(
             content=html,
@@ -99,7 +99,7 @@ class ReaderService:
         )
 
     def read_chunk(self, content_id: str, size: int, from_span: str = None,
-                   uid: str = None) -> ReadResponse:
+                   entity_id: str = None) -> ReadResponse:
         """加载指定字数的切片（AI Agent使用）"""
         if from_span:
             parsed = parse_span_id(from_span)
@@ -125,7 +125,7 @@ class ReaderService:
         has_more = located.has_more
         next_from = self._get_next_span(content_id, located.end_location) if has_more else None
 
-        annotations = self.db.get_annotations(content_id, uid=uid) if self.db else []
+        annotations = self.db.get_anchors_for_unit(content_id, entity_id=entity_id) if self.db else []
 
         return ReadResponse(
             content=html,

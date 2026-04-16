@@ -49,7 +49,7 @@ async def create_source(req: CreateSourceRequest, user: dict = Depends(get_curre
         schedule=req.schedule,
         max_items=req.max_items,
         filters=req.filters,
-        created_by=user["uid"],
+        created_by=user["entity_id"],
     )
 
     return {"id": source_id, "url": req.url}

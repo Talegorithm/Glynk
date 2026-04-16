@@ -23,12 +23,12 @@ export default function RegisterPage() {
     setSubmitting(true);
     try {
       const res = await register({
-        uid: uid.trim() || undefined,
+        display_name: uid.trim() || undefined,
         email: email.trim() || undefined,
       });
-      setAuth({ uid: res.uid, token: res.token });
+      setAuth({ uid: res.entity_id, token: res.token });
       setResultToken(res.token);
-      setResultUid(res.uid);
+      setResultUid(res.entity_id);
       setStep(2);
     } catch (err: any) {
       toast.error(err?.response?.data?.detail || '注册失败');

@@ -8,7 +8,7 @@ export interface SemanticSearchParams {
 }
 
 export interface SemanticSearchResult {
-  annotation_id: string;
+  id: string;
   content_id: string;
   content_title: string;
   content_author: string;
@@ -25,6 +25,6 @@ export async function semanticSearch(params: SemanticSearchParams): Promise<{
   query_id: string;
   results: SemanticSearchResult[];
 }> {
-  const res = await client.post<{ query_id: string; results: SemanticSearchResult[] }>('/query', params);
+  const res = await client.post<{ query_id: string; results: SemanticSearchResult[] }>('/units/search', params);
   return res.data;
 }

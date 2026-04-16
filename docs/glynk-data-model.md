@@ -71,6 +71,47 @@ CREATE INDEX idx_anchors_role ON anchors(role);
 
 ---
 
+## Anchor 使用模式：讨论线程
+
+回复一段话或一条 Unit 时，**同时挂两个 Anchor**：
+
+```
+Unit A（一级回复 on 某段文本）
+  └─ Anchor(target_span=某段, role=reply)
+
+Unit B（回复 A）
+  ├─ Anchor(target_span=某段, role=reply)       ← 主题锚
+  └─ Anchor(target_unit=A, role=reply_to)        ← 父节点锚
+
+Unit C（回复 B）
+  ├─ Anchor(target_span=某段, role=reply)
+  └─ Anchor(target_unit=B, role=reply_to)
+```
+
+**为什么两个**：主题锚保证"查这段话下所有讨论"是一次扁平查询；父节点锚保证可重建对话树。冗余是刻意的，换查询效率和语义清晰。
+
+**深度无限制**——前端决定显示策略（缩进 / 折叠 / 展开独立页）。
+
+**每条回复仍是独立 Unit**——可被单独语义搜索、被第三方 anchor、出现在作者的 Units 列表里。
+
+---
+
+## Embedding 策略
+
+默认 embed，但满足以下任一条件**不 embed**（vector 留 null）：
+
+- **字符数 < 30**（去标点和 emoji 后）
+- **metadata.skip_embedding = true**（用户/Agent 显式标记）
+- **role 不在 EMBEDDING_ROLES**（纯关系类 anchor 不触发 embed）
+
+EMBEDDING_ROLES = { `highlight`, `hook`, `note`, `reply`, `topic`, `summary` }
+
+非 EMBEDDING_ROLES 的 anchor（`reaction` / `like` / `follow` / `reply_to` / `bookmark` 等）要么没有 source Unit body（纯关系），要么是结构性指针——都不需要 embed。
+
+**Vector 字段 nullable**，未来可补 embed（如"这条短回复被很多人引用了→值得 embed"）。
+
+---
+
 ## Sidecar 表
 
 ### Auth（从 Entity 分离）

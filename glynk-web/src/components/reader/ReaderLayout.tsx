@@ -85,8 +85,8 @@ export function ReaderLayout({ toolbar, toc, outline, content }: ReaderLayoutPro
       {/* Remove the hardcoded subtle background gradient so we can see the glorious dynamic sky */}
       <div className="absolute inset-0 bg-white/30 dark:bg-gray-900/40 pointer-events-none" />
 
-      {/* 顶部工具栏 - 毛玻璃 */}
-      <div className="flex-shrink-0 relative z-20 bg-white/70 dark:bg-gray-900/70 backdrop-blur-md border-b border-gray-200/50 dark:border-gray-700/50 shadow-sm">
+      {/* 顶部工具栏 - 毛玻璃 (原样保留，不再做绝对定位) */}
+      <div className="flex-shrink-0 relative z-20 bg-white/70 dark:bg-gray-900/70 backdrop-blur-md border-b border-gray-200/50 dark:border-gray-700/50 shadow-sm transition-colors duration-300">
         {toolbar}
       </div>
 
@@ -95,7 +95,7 @@ export function ReaderLayout({ toolbar, toc, outline, content }: ReaderLayoutPro
         {/* 目录/大纲侧边栏（桌面端）- 毛玻璃 */}
         {tocVisible && (
           <div
-            className="hidden md:flex flex-col flex-shrink-0 bg-white/60 dark:bg-gray-900/60 backdrop-blur-lg border-r border-gray-200/50 dark:border-gray-700/50 relative shadow-[4px_0_24px_rgba(0,0,0,0.02)]"
+            className="hidden md:flex flex-col flex-shrink-0 bg-white/80 dark:bg-gray-900/80 sky:bg-white/40 sky:dark:bg-black/30 backdrop-blur-2xl border-r border-gray-200/50 dark:border-gray-800/50 sky:border-white/40 sky:dark:border-white/10 relative shadow-[4px_0_24px_rgba(0,0,0,0.02)] transition-colors duration-300"
             style={{ width: `${sidebarWidth}px` }}
           >
             {/* Tab 切换器 */}
@@ -154,11 +154,11 @@ export function ReaderLayout({ toolbar, toc, outline, content }: ReaderLayoutPro
           onClick={toggleToc}
         >
           <div
-            className="absolute left-0 top-0 bottom-0 w-80 max-w-full bg-white dark:bg-gray-900 shadow-xl overflow-y-auto"
+            className="absolute left-0 top-0 bottom-0 w-80 max-w-full bg-white/80 dark:bg-gray-900/80 sky:bg-white/40 sky:dark:bg-black/30 backdrop-blur-2xl shadow-xl overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* 头部：关闭按钮 + Tab 切换 */}
-            <div className="sticky top-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 z-10">
+            <div className="sticky top-0 bg-transparent border-b border-gray-200/50 dark:border-gray-800/50 sky:border-white/40 sky:dark:border-white/10 z-10 backdrop-blur-md">
               <div className="px-4 py-3 flex justify-between items-center">
                 <span className="font-bold text-lg text-gray-900 dark:text-gray-100">
                   {activeTab === 'toc' ? t('reader.toc') : t('reader.outline')}

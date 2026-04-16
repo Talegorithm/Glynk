@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from glynk.config import AppConfig
 from glynk.storage.postgres import PostgresStore
 from glynk.content.reader import ReaderService
-from glynk.annotation.service import AnnotationService
+from glynk.annotation.service import AnchorService
 from glynk.annotation.search import RetrievalEngine
 from glynk.annotation.vector_store import PgVectorStore
 from glynk.ingestion.pipeline import IngestionPipeline
@@ -36,31 +36,29 @@ async def lifespan(app: FastAPI):
     # ===== Startup =====
     config = AppConfig.from_env()
 
-    # 确保数据目录存在
     config.storage.html_root.mkdir(parents=True, exist_ok=True)
     config.storage.uploads_root.mkdir(parents=True, exist_ok=True)
 
-    # 初始化数据库
     db = PostgresStore(config.storage)
     PostgresStore._instance = db
 
-    # 初始化服务
     vector_store = PgVectorStore(db)
-    annotation_service = AnnotationService(db, vector_store, config.embedding)
+    anchor_service = AnchorService(db, vector_store, config.embedding)
     retrieval_engine = RetrievalEngine(db, vector_store, config.embedding)
     reader_service = ReaderService(html_root=config.storage.html_root, db=db)
     pipeline = IngestionPipeline(config, db)
 
-    # 注入服务到路由
+    # Inject services
     from glynk.api.ingest_router import set_pipeline
-    from glynk.api.content_router import set_reader
+    from glynk.api.content_router import set_reader, set_retrieval_engine
     from glynk.api.annotation_router import set_services
 
     set_pipeline(pipeline)
     set_reader(reader_service)
-    set_services(annotation_service, retrieval_engine)
+    set_retrieval_engine(retrieval_engine)
+    set_services(anchor_service, retrieval_engine)
 
-    # RSS 定时拉取
+    # RSS scheduler
     rss_fetcher = RSSFetcher(db, pipeline)
 
     try:
@@ -92,12 +90,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Glynk",
-    description="Agent时代内容平台 - 多元标注让好内容被发现",
-    version="0.1.0",
+    description="Agent时代内容平台",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
-# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -106,35 +103,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 注册路由
-from glynk.api.user_router import router as user_router
+# Register routers
+from glynk.api.user_router import router as auth_router
 from glynk.api.ingest_router import router as ingest_router
-from glynk.api.content_router import router as content_router
-from glynk.api.annotation_router import router as annotation_router
+from glynk.api.content_router import router as unit_router
+from glynk.api.annotation_router import router as anchor_router
 from glynk.api.source_router import router as source_router
 from glynk.api.feedback_router import router as feedback_router
 
-app.include_router(user_router, prefix="/api")
+app.include_router(auth_router, prefix="/api")
 app.include_router(ingest_router, prefix="/api")
-app.include_router(content_router, prefix="/api")
-app.include_router(annotation_router, prefix="/api")
+app.include_router(unit_router, prefix="/api")
+app.include_router(anchor_router, prefix="/api")
 app.include_router(source_router, prefix="/api")
 app.include_router(feedback_router, prefix="/api")
 
 
-# ===== 静态文件：媒体（图片）=====
+# ===== Media =====
 
 @app.get("/media/{content_id}/{filename}")
 async def get_media(content_id: str, filename: str):
-    """提供内容图片"""
     config = AppConfig.from_env()
     file_path = config.storage.html_root / content_id / filename
     if not file_path.exists():
         return JSONResponse(status_code=404, content={"error": "File not found"})
     return FileResponse(file_path)
 
-
-# ===== Health =====
 
 @app.get("/health")
 async def health():
@@ -146,5 +140,6 @@ async def root():
     return {
         "service": "Glynk",
         "description": "Agent时代内容平台",
+        "version": "0.2.0",
         "docs": "/docs",
     }

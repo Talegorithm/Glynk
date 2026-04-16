@@ -1,15 +1,19 @@
 export interface User {
-  uid: string;
+  entity_id: string;
+  display_name?: string;
   email?: string;
+  kind?: string;
+  state?: string;
   created_at?: string;
 }
 
 export interface RegisterResponse {
-  uid: string;
+  entity_id: string;
   token: string;
 }
 
 export interface LoginResponse {
-  uid: string;
+  entity_id: string;
+  display_name?: string;
   email?: string;
 }
