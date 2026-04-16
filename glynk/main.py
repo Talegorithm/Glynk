@@ -42,10 +42,12 @@ async def lifespan(app: FastAPI):
     db = PostgresStore(config.storage)
     PostgresStore._instance = db
 
+    file_store = config.create_file_store()
+
     vector_store = PgVectorStore(db)
     anchor_service = AnchorService(db, vector_store, config.embedding)
     retrieval_engine = RetrievalEngine(db, vector_store, config.embedding)
-    reader_service = ReaderService(html_root=config.storage.html_root, db=db)
+    reader_service = ReaderService(file_store=file_store, db=db)
     pipeline = IngestionPipeline(config, db)
 
     # Inject services

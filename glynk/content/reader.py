@@ -14,6 +14,7 @@ from bs4 import BeautifulSoup
 from glynk.content.locator import SpanLocator
 from glynk.content.ai_view import to_ai_view
 from glynk.models import parse_span_id
+from glynk.storage.file_store import FileStore, LocalFileStore
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +38,9 @@ class ReadResponse:
 class ReaderService:
     """阅读器服务"""
 
-    def __init__(self, html_root: Path, db=None):
-        self.html_root = html_root
-        self.locator = SpanLocator(html_root=html_root)
+    def __init__(self, html_root: Path = None, db=None, file_store: FileStore = None):
+        self.file_store = file_store or LocalFileStore(html_root or Path("/data/glynk/html"))
+        self.locator = SpanLocator(file_store=self.file_store)
         self.db = db
 
     def read_file(self, content_id: str, file_idx: int = None, from_span: str = None,
@@ -59,7 +60,7 @@ class ReaderService:
         # 跳过没有 span 的文件（封面、版权页等）
         while not self._get_first_span(content_id, file_idx):
             file_idx += 1
-            if not (self.html_root / content_id / f"{file_idx}.html").exists():
+            if not self.file_store.html_exists(content_id, f"{file_idx}.html"):
                 break
             html, from_span_actual, to_span_actual, char_count = self._load_file(
                 content_id, file_idx
@@ -68,7 +69,7 @@ class ReaderService:
         # 找下一个有 span 的文件
         next_idx = file_idx + 1
         next_from = None
-        while (self.html_root / content_id / f"{next_idx}.html").exists():
+        while self.file_store.html_exists(content_id, f"{next_idx}.html"):
             next_from = self._get_first_span(content_id, next_idx)
             if next_from:
                 break
@@ -78,9 +79,9 @@ class ReaderService:
         # 翻译
         translation_status = "original"
         if lang:
-            translated_path = self.html_root / content_id / f"{file_idx}.{lang}.html"
-            if translated_path.exists():
-                html = translated_path.read_text(encoding='utf-8')
+            translated = self.file_store.read_html(content_id, f"{file_idx}.{lang}.html")
+            if translated is not None:
+                html = translated
                 translation_status = "translated"
             else:
                 translation_status = "not_available"
@@ -140,11 +141,9 @@ class ReaderService:
 
     def _load_file(self, content_id: str, file_idx: int) -> tuple:
         """加载整个文件内容"""
-        file_path = self.html_root / content_id / f"{file_idx}.html"
-        if not file_path.exists():
+        html = self.file_store.read_html(content_id, f"{file_idx}.html")
+        if html is None:
             return "", "", "", 0
-
-        html = file_path.read_text(encoding='utf-8')
         soup = BeautifulSoup(html, 'html.parser')
         text = soup.get_text()
         char_count = len(text)
@@ -159,19 +158,17 @@ class ReaderService:
         """Check if a span_id exists in its corresponding HTML file"""
         try:
             parsed = parse_span_id(span_id)
-            file_path = self.html_root / content_id / f"{parsed['file_idx']}.html"
-            if not file_path.exists():
+            html = self.file_store.read_html(content_id, f"{parsed['file_idx']}.html")
+            if html is None:
                 return False
-            html = file_path.read_text(encoding='utf-8')
             return f'id="{span_id}"' in html
         except Exception:
             return False
 
     def _get_first_span(self, content_id: str, file_idx: int) -> Optional[str]:
-        file_path = self.html_root / content_id / f"{file_idx}.html"
-        if not file_path.exists():
+        html = self.file_store.read_html(content_id, f"{file_idx}.html")
+        if html is None:
             return None
-        html = file_path.read_text(encoding='utf-8')
         soup = BeautifulSoup(html, 'html.parser')
         first = soup.find('span', id=True)
         return first.get('id') if first else None
@@ -181,11 +178,10 @@ class ReaderService:
         parsed = parse_span_id(current_span)
         file_idx = parsed['file_idx']
 
-        file_path = self.html_root / content_id / f"{file_idx}.html"
-        if not file_path.exists():
+        html = self.file_store.read_html(content_id, f"{file_idx}.html")
+        if html is None:
             return None
 
-        html = file_path.read_text(encoding='utf-8')
         soup = BeautifulSoup(html, 'html.parser')
         spans = [s.get('id') for s in soup.find_all('span', id=True) if s.get('id')]
 

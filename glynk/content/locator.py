@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup, Tag
 from dataclasses import dataclass
 
 from glynk.models import parse_span_id
+from glynk.storage.file_store import FileStore, LocalFileStore
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +27,8 @@ class LocatedContent:
 
 class SpanLocator:
 
-    def __init__(self, html_root: Path):
-        self.html_root = html_root
+    def __init__(self, html_root: Path = None, file_store: FileStore = None):
+        self.file_store = file_store or LocalFileStore(html_root or Path("/data/glynk/html"))
 
     def get_content_from_location(self, content_id: str, start_location: str,
                                   target_chars: int) -> LocatedContent:
@@ -109,12 +110,11 @@ class SpanLocator:
         return all_spans
 
     def _load_spans_from_file(self, content_id: str, file_idx: int) -> List[dict]:
-        file_path = self.html_root / content_id / f"{file_idx}.html"
-        if not file_path.exists():
+        html_content = self.file_store.read_html(content_id, f"{file_idx}.html")
+        if html_content is None:
             return []
 
         try:
-            html_content = file_path.read_text(encoding='utf-8')
             soup = BeautifulSoup(html_content, 'html.parser')
             spans = []
             for span_tag in soup.find_all('span', id=True):

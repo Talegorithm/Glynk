@@ -4,6 +4,17 @@
 所在路径：
 `/mnt/tracker/Resonote/Resonote`
 
-现有的部署在docker中运行；新的部署可能也需要在docker中运行，因为登陆的账号有docker权限，但是可能缺少一些配置宿主机的权限。
+在docker中运行，先已停止；新的部署可能也需要在docker中运行，因为登陆的账号有docker权限，但是可能缺少一些配置宿主机的权限。
 
-因为一些长期的可能失败的定时任务，现在部署的数据库中又可能有垃圾数据（一般是来自RSS的），来自EPUB的数据应该是优质的可以继承的。
+服务器端口转发
+
+```
+22334->32002 # dev ssh
+22335->32003 # frp (用于连接本地PC做mineru解析；服务器宿主机：~/frp_0.52.3_linux_amd64)
+22237->32004 # Milvus gRPC
+22238->32005 # dev Webhook Server (CD)
+22233->32006 # PostgreSQL
+22333->32007 # nginx
+22234->32008 # neo4j Bolt
+22337->?     # frp
+```

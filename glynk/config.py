@@ -58,6 +58,14 @@ class AppConfig:
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
     translation: TranslationConfig = field(default_factory=TranslationConfig)
     rss_check_interval_hours: int = 24
+    remote_file_base: str = ""  # 非空时用 RemoteFileStore 从远程读文件（本地开发用）
+
+    def create_file_store(self):
+        """根据配置创建 FileStore。REMOTE_FILE_BASE 非空时用远程，否则用本地。"""
+        from glynk.storage.file_store import LocalFileStore, RemoteFileStore
+        if self.remote_file_base:
+            return RemoteFileStore(self.remote_file_base)
+        return LocalFileStore(self.storage.html_root)
 
     @classmethod
     def from_env(cls) -> "AppConfig":
@@ -87,4 +95,5 @@ class AppConfig:
             embedding=embedding,
             translation=translation,
             rss_check_interval_hours=int(os.getenv("RSS_CHECK_INTERVAL_HOURS", "24")),
+            remote_file_base=os.getenv("REMOTE_FILE_BASE", ""),
         )
