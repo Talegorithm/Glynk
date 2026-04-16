@@ -10,6 +10,7 @@ from glynk.ingestion.handler.base import ContentTypeHandler
 from glynk.ingestion.handler.academic_paper import AcademicPaperHandler
 from glynk.ingestion.handler.book import BookHandler
 from glynk.ingestion.handler.wechat_article import WeChatArticleHandler
+from glynk.ingestion.handler.markdown import MarkdownHandler
 from glynk.ingestion.handler.generic_article import GenericArticleHandler
 from glynk.ingestion.handler.fallback import FallbackHandler
 
@@ -21,6 +22,7 @@ class HandlerRegistry:
             AcademicPaperHandler(),
             BookHandler(),
             WeChatArticleHandler(),
+            MarkdownHandler(),
             GenericArticleHandler(),
             FallbackHandler(),
         ]
@@ -34,6 +36,7 @@ class HandlerRegistry:
             'academic_paper': AcademicPaperHandler(),
             'book': BookHandler(),
             'wechat_article': WeChatArticleHandler(),
+            'markdown': MarkdownHandler(),
             'generic': GenericArticleHandler(),
         }
 

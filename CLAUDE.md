@@ -33,7 +33,7 @@ glynk/
 ├── ingestion/              # 核心1：任意格式 → Unit(origin=ingested)
 │   ├── pipeline.py         # 摄入流水线（含 author Entity 创建）
 │   ├── registry.py         # Handler选择
-│   ├── handler/            # 内容类型handler
+│   ├── handler/            # 内容类型handler (epub, pdf, html, markdown, ...)
 │   ├── format_utils/       # 格式工具（epub, pdf, html）
 │   └── processing/         # HTML处理
 ├── content/                # 核心2：双视图阅读
@@ -78,6 +78,8 @@ uvicorn glynk.main:app --reload --port 8000
 cd glynk-web && npm install && npm run dev
 ```
 
+本地开发连远程数据、服务器部署、端口转发等详见 `docs/deploy.md`。
+
 ## Key Design
 
 - 平台不跑LLM，只做结构化处理和embedding检索
@@ -111,8 +113,13 @@ POST /api/units/search           → 语义检索
 POST /api/anchors                → 创建标注
 POST /api/anchors/batch          → 批量
 GET  /api/anchors                → 查询
-POST /api/ingest                 → 摄入
+POST /api/ingest                 → 摄入（URL）
+POST /api/ingest/upload          → 摄入（文件上传，支持 epub/pdf/html/md/zip）
 ```
+
+### Markdown 上传
+
+用户自制内容通过 Markdown 上传。支持 frontmatter（title/author）和本地图片引用。上传脚本在 `skills/glk-ingest/upload_md.py`。
 
 ### 图片路径
 

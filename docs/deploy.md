@@ -11,6 +11,23 @@
                                          └── /*      → SPA (index.html)
 ```
 
+## 本地开发（连远程数据）
+
+通过已有端口转发直连服务器 DB 和文件，无需 SSH 隧道：
+
+```bash
+export POSTGRES_HOST=ijiaodui.com
+export POSTGRES_PORT=32006
+export REMOTE_FILE_BASE=http://ijiaodui.com:32007
+uvicorn glynk.main:app --reload --port 8000
+```
+
+- `REMOTE_FILE_BASE` 启用 `RemoteFileStore`（`glynk/storage/file_store.py`）：Reader 通过 HTTP 从远程读 HTML 文件，带 LRU 缓存
+- 不设 `REMOTE_FILE_BASE` 时默认走 `LocalFileStore`（本地磁盘），生产环境零影响
+- Auth token 和线上共用同一个 DB，账号通用
+
+---
+
 ## 后端服务器
 
 - 地址: `dell@ijiaodui.com`
