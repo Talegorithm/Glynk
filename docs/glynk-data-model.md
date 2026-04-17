@@ -56,7 +56,7 @@ CREATE TABLE anchors (
   target_unit     TEXT REFERENCES units(id),
   target_span     TEXT,                   -- span_id：{unit_id}-{file_idx}-p{n}-s{m}
   target_entity   TEXT REFERENCES entities(id),
-  role            TEXT NOT NULL,          -- highlight | hook | note | reaction | like | follow | ...
+  role            TEXT NOT NULL,          -- see glynk/models.py ROLE_SCHEMAS
   metadata        JSONB DEFAULT '{}',     -- color, offsets, emoji, ...
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
@@ -71,42 +71,57 @@ CREATE INDEX idx_anchors_role ON anchors(role);
 
 ---
 
+## Anchor role 与 schema
+
+Role 的允许取值和 (source, target, body) 约束在 [`glynk/models.py`](../glynk/models.py) 的 `ROLE_SCHEMAS` 里定义，创建时走 `validate_anchor` 强制校验。
+
+| role | source | target | body | 谁用 |
+|---|---|---|---|---|
+| highlight | unit | span | auto（= target span 副本）| 人 + Agent |
+| hook | unit | span | required | Agent 为主 |
+| note | unit | span \| unit | required | 人为主 |
+| summary | unit | unit | required | Agent 为主 |
+| reply | unit | span \| unit | optional（文字 / emoji / 图片）| 人为主 |
+| like | entity | span \| unit | none | 人 |
+| bookmark | entity | span \| unit | none | 人 |
+| follow | entity | entity | none | 人 |
+
+Unit.metadata.role 是 source Unit 从 Anchor role 冗余过来的，仅用于搜索过滤 —— 不要和 ROLE_SCHEMAS 分叉。
+
+---
+
 ## Anchor 使用模式：讨论线程
 
-回复一段话或一条 Unit 时，**同时挂两个 Anchor**：
+回复用**一条 anchor + metadata 里的父节点指针**：
 
 ```
 Unit A（一级回复 on 某段文本）
-  └─ Anchor(target_span=某段, role=reply)
+  └─ Anchor(target_span=某段, role=reply, metadata={})
 
 Unit B（回复 A）
-  ├─ Anchor(target_span=某段, role=reply)       ← 主题锚
-  └─ Anchor(target_unit=A, role=reply_to)        ← 父节点锚
+  └─ Anchor(target_span=某段, role=reply, metadata={in_reply_to: A.unit_id})
 
 Unit C（回复 B）
-  ├─ Anchor(target_span=某段, role=reply)
-  └─ Anchor(target_unit=B, role=reply_to)
+  └─ Anchor(target_span=某段, role=reply, metadata={in_reply_to: B.unit_id})
 ```
 
-**为什么两个**：主题锚保证"查这段话下所有讨论"是一次扁平查询；父节点锚保证可重建对话树。冗余是刻意的，换查询效率和语义清晰。
+- `target_span` 在每条 reply 上都保留，指向**话题锚点**（原文位置）—— "查这段话下所有讨论" 一次扁平 SQL 就够
+- `metadata.in_reply_to` 承载**父节点指针**—— 前端据此 group 构树
+- 不再创建额外的 `reply_to` anchor；旧设计里那条是死代码，且跟 ROLE_SCHEMAS 冲突
 
-**深度无限制**——前端决定显示策略（缩进 / 折叠 / 展开独立页）。
-
-**每条回复仍是独立 Unit**——可被单独语义搜索、被第三方 anchor、出现在作者的 Units 列表里。
+深度无限制；前端决定显示策略（缩进 / 折叠 / 展开独立页）。每条回复仍是独立 Unit，可被语义搜索、被第三方 anchor、出现在作者的 Units 列表里。
 
 ---
 
 ## Embedding 策略
 
-默认 embed，但满足以下任一条件**不 embed**（vector 留 null）：
+决策集中在 [`glynk/embedding/service.py`](../glynk/embedding/service.py) 的 `maybe_embed(text, config, metadata)`。默认 embed，但满足以下任一条件**不 embed**（vector 留 null）：
 
-- **字符数 < 30**（去标点和 emoji 后）
+- **有效字符数 < 30**（去标点和 emoji 后；`should_embed` 阈值）
 - **metadata.skip_embedding = true**（用户/Agent 显式标记）
-- **role 不在 EMBEDDING_ROLES**（纯关系类 anchor 不触发 embed）
+- **未配置 Azure OpenAI**
 
-EMBEDDING_ROLES = { `highlight`, `hook`, `note`, `reply`, `topic`, `summary` }
-
-非 EMBEDDING_ROLES 的 anchor（`reaction` / `like` / `follow` / `reply_to` / `bookmark` 等）要么没有 source Unit body（纯关系），要么是结构性指针——都不需要 embed。
+Embedding 决策**不看 role** —— ROLE_SCHEMAS 已经保证了 body 的存在性，短 body 的 role（如 emoji-only reply、highlight 的 span 副本）会被长度阈值自然过滤。Ingested Unit 不设 `vector_text`，自然不 embed。
 
 **Vector 字段 nullable**，未来可补 embed（如"这条短回复被很多人引用了→值得 embed"）。
 

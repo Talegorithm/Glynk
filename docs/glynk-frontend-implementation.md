@@ -49,7 +49,11 @@ POST /units
 
 **数据模型规则**（详见 `glynk-data-model.md` "Anchor 使用模式：讨论线程"）：
 
-每条回复都是一个独立 Unit。一条 Anchor 把它锚到原文 span（主题锚）；如果是回复别人的回复，再加一条 Anchor 锚到父 Unit（父节点锚）。**前端不需要手动建第二条 anchor**——后端在收到 `in_reply_to` 时自动建好。
+每条回复都是一个独立 Unit，挂一条 Anchor：
+- `target_span` = 话题锚（原文某段），**所有层级的 reply 都一致**
+- `metadata.in_reply_to` = 父 reply 的 Unit id（一级回复留空）
+
+一次扁平查询（按 `target_span` + `role='reply'`）即可拿到 thread 全部节点，前端在 metadata 上 group 构树。
 
 **后端提供的 API**：
 
@@ -59,33 +63,20 @@ POST /anchors
     target_unit:  string         // 被回复内容所在 Unit
     target_span:  string?        // 被回复的具体段落
     role:         'reply'
-    text:         string         // 回复内容
-    in_reply_to:  string?        // 父回复 Unit ID（一级回复留空）
+    text:         string         // 回复内容（可选——支持 emoji/图片-only 的 reply，body=optional）
+    in_reply_to:  string?        // 父回复 Unit ID（一级回复留空）；后端会写到 anchor.metadata.in_reply_to
   }
-  Response: { id, source_unit_id, reply_to_anchor_id?, ... }
+  Response: { id, source_unit_id, role, target_unit, target_span, metadata, ... }
   Auth: required
-
-  当 role='reply' 且 in_reply_to 非空时，后端自动创建第二条 role='reply_to' 的 anchor
-  从同一个 source Unit 指向 in_reply_to。前端无感知。
 ```
 
 ```
-GET /anchors
-  Query: target_unit, target_span?, role, limit, offset
-  Response: { annotations: [...], total }
-  
-  用 role='reply' 取该 span 下的所有回复 Units
-```
+GET /anchors/thread
+  Query: target_unit, target_span
+  Response: { annotations: [...] }
 
+  返回该 span 下所有可见 anchor 的扁平列表，前端用 metadata.in_reply_to 构树。
 ```
-GET /anchors
-  Query: source_unit (某个回复 Unit 的 ID), role='reply_to'
-  返回该回复的父节点 anchor → target_unit 即父 Unit ID
-  
-  用于前端构建 flat list → tree
-```
-
-> 如果 N+1 查询性能不可接受，前端可向后端提需求加 `GET /anchors/thread`，一次返回完整树。
 
 **关键性质**：每条回复**都是独立 Unit**（有自己的 id、可独立搜索、可被第三方引用）。前端实现时不要把它当成"评论数据"，要当成"挂在 thread 里的一等 Unit"。
 

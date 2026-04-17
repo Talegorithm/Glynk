@@ -51,10 +51,9 @@ export function ThreadView({ contentId, targetSpan, pendingSelection, onClose, r
       setLoading(true);
       try {
         const data = await getSpanThread(contentId, targetSpan);
-        // data contains all anchors for this unit. We need to filter.
-        // A root thread item is an anchor with role='reply' and target_span = targetSpan
-        // A nested item is an anchor with role='reply_to' pointing to a parent unit.
-        // The backend returns a flat list. Let's just keep everything and build tree in render.
+        // Backend returns all anchors for this unit (flat list).
+        // Roots: role='reply' with target_span === targetSpan (or role='note').
+        // Children: role='reply' with metadata.in_reply_to === parent reply's unit_id.
         setAnnotations(data);
       } catch (err) {
         console.error('Failed to load thread:', err);
@@ -279,8 +278,9 @@ interface ThreadNodeData {
 }
 
 function buildTree(annotations: Annotation[], uid: string | null, targetSpan: string): ThreadNodeData[] {
-  // Types we want to show in ThreadView
-  const validTypes = ['reply', 'reply_to', 'note'];
+  // Roles shown in ThreadView. 'reply_to' is dead legacy (the old 2nd-anchor trick);
+  // backend no longer emits it.
+  const validTypes = ['reply', 'note'];
   const nodes = annotations
     .filter(a => validTypes.includes(a.type))
     .map(a => ({

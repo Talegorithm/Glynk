@@ -26,12 +26,17 @@ class AnchorService:
     async def create(self, entity_id: str, target_unit: str, role: str,
                      target_span: str = None, metadata: dict = None,
                      text: str = "", tags: list[str] = None,
-                     visibility: str = "public") -> dict:
+                     visibility: str = "public",
+                     in_reply_to: str | None = None) -> dict:
         """
         创建 Anchor。如果 text 非空，先创建 source Unit。
 
         Role 的合法 (source_type, target_type, body) 组合由 ROLE_SCHEMAS 定义。
         不合法的组合直接 ValueError。
+
+        Reply 语义：当 role='reply' 且 in_reply_to 非空时，把父 reply 的 Unit id
+        写入 anchor.metadata.in_reply_to —— 前端据此构建 thread 树。`target_span`
+        仍指向原文话题锚点，使"某 span 下所有 reply" 是一次 O(1) 过滤查询。
 
         返回 {anchor_id, source_unit_id, ...}
         """
@@ -42,6 +47,10 @@ class AnchorService:
         self._expand_metadata_spans(metadata, target_unit)
         if target_span:
             target_span = expand_span_id(target_span, target_unit)
+
+        # Thread parent pointer lives in metadata, not as a separate anchor
+        if role == 'reply' and in_reply_to:
+            metadata['in_reply_to'] = in_reply_to
 
         # Determine source/target types, then validate before creating anything
         source_type = 'unit' if text else 'entity'

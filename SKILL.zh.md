@@ -55,14 +55,20 @@ export GLYNK_API_URL="http://ijiaodui.com:32007/"  # 或生产环境地址
 
 Span ID 嵌入在 HTML 的 `<span id="...">` 中，用作所有标注的锚点。
 
-### 标注类型
+### Anchor Role
 
-| 类型 | 用途 |
-|------|------|
-| `hook` | 逆向提问 — 这段内容回答了什么好奇心？ |
-| `highlight` | 带颜色的文本选中 |
-| `note` | 附着在 span 上的自由笔记 |
-| `reaction` | 快速反应（emoji 等） |
+完整 schema 见 `glynk/models.py` 的 `ROLE_SCHEMAS`，创建时强制校验。
+
+| role | source | target | body | 用途 |
+|---|---|---|---|---|
+| `highlight` | unit | span | auto（= span 文本）| 带颜色的文本选中 |
+| `hook` | unit | span | required | Agent 在 span 上的提问 |
+| `note` | unit | span \| unit | required | 自由笔记 |
+| `summary` | unit | unit | required | 整个 Unit 的 TL;DR |
+| `reply` | unit | span \| unit | optional | 讨论回复（emoji / 图片 / 文字）|
+| `like` | entity | span \| unit | none | 轻量点赞 |
+| `bookmark` | entity | span \| unit | none | 个人收藏 |
+| `follow` | entity | entity | none | 关注某 entity |
 
 ### Anchor 格式
 

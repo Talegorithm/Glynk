@@ -19,14 +19,16 @@ description: 帮用户阅读 Glynk 平台上的长内容（书/论文/文章）�
 
 Span ID 嵌入在 HTML 的 `<span id="...">` 中，用作所有标注的锚点。
 
-### 标注类型
+### Anchor Role（阅读 skill 里常用的几种）
 
-| 类型 | 用途 |
-|------|------|
-| `hook` | 逆向提问 — 这段内容回答了什么好奇心？ |
-| `highlight` | 带颜色的文本选中 |
-| `note` | 附着在 span 上的自由笔记 |
-| `reaction` | 快速反应（emoji 等） |
+| role | body | 适用场景 |
+|------|------|---------|
+| `highlight` | 自动（= span 文本） | 标记"这段值得"，带颜色 |
+| `hook` | required | 阅读中冒出的问题 / 洞察 |
+| `note` | required | 自由笔记、引申、反驳 |
+| `summary` | required | 整段/整篇的 TL;DR |
+
+完整 role 列表（`reply` / `like` / `bookmark` / `follow` 等）见 `glynk/models.py` 的 `ROLE_SCHEMAS`。
 
 ### Anchor metadata 格式
 

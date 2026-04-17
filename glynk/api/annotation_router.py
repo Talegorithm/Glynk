@@ -33,6 +33,7 @@ class CreateAnchorRequest(BaseModel):
     text: str = ""                    # creates a source Unit if non-empty
     tags: list[str] = []
     visibility: str = "public"
+    in_reply_to: str | None = None    # 当 role='reply' 时：父 reply 的 Unit id；会存进 anchor.metadata.in_reply_to
 
 
 class BatchCreateRequest(BaseModel):
@@ -64,6 +65,7 @@ async def create_anchor(req: CreateAnchorRequest, user: dict = Depends(get_curre
             text=req.text,
             tags=req.tags,
             visibility=req.visibility,
+            in_reply_to=req.in_reply_to,
         )
     except ValueError as e:
         raise HTTPException(400, str(e))

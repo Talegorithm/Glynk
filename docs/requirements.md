@@ -76,7 +76,7 @@ Resonote（我的毕设项目，FastAPI + Neo4j + Milvus + PostgreSQL）已经�
 - 标注默认公开（众包才转得动），用户可选private（私人笔记）
 - LLM标注成本在Agent侧，不在平台侧
 
-**标注类型**：highlight、hook、note、topic、summary、**reaction**（弹幕/评论/emoji）。reaction是用户在多模态内容上的低摩擦反应，量大但质低，不参与语义检索，只贡献众包信号（crowd_count）。AI Agent可聚合reaction生成精确标注。
+**Anchor role**（实现见 `glynk/models.py` ROLE_SCHEMAS）：`highlight` / `hook` / `note` / `summary` 是带内容的精确标注；`like` / `bookmark` / `follow` 是无 body 的轻量信号；`reply` 是挂在话题 span 下的讨论回复（text 可选，允许 emoji / 图片-only）。低摩擦反应（弹幕/评论/emoji）的低质信号用 `like` 或 emoji-only `reply` 承载，量大但不参与语义检索（短 body 被 embedding 阈值自然过滤），AI Agent 可聚合这些信号生成精确标注。
 
 **锚定方式（anchor）**：标注通过anchor字段定位到内容中的具体位置。MVP阶段只有文本锚定（span_id列表），数据模型用JSONB预留扩展空间，未来支持时间锚定（音视频时间段）和空间锚定（图片/幻灯片区域）。anchor只负责定位（WHERE），对内容的理解（WHAT/WHY）放在标注的text和tags中。
 
@@ -126,7 +126,7 @@ Agent分析内容 → 自然产出标注 → 写回Glynk
   → 其他Agent搜索时命中这些标注
     → 用户打开阅读/观看 → 高亮、写笔记、发弹幕
       → 精确标注直接提升内容质量
-      → 模糊反应(reaction)由AI Agent聚合解读为精确标注
+      → 模糊反应（like / 短 reply）由AI Agent聚合解读为精确标注
         → 众包信号提升 → 更多人发现 → ...
 ```
 
@@ -177,7 +177,7 @@ ingest(url | file)              导入内容，做结构化处理
 annotate(content_id, anchor,    创建标注（Agent或人都调这个）
   type, text, source,           anchor: {"type":"text","spans":[...]}
   uid?, visibility?, ...)
-  → Content-DB存储 + 生成embedding索引（reaction类型除外）
+  → Content-DB存储 + 生成embedding索引（短 body / 无 body 的 role 自然被过滤）
 
 annotate/batch([...])           批量创建标注
 
@@ -267,7 +267,7 @@ POST /agent/feedback            Agent回传粗反馈（用户没打开阅读器�
 ### Phase 3：扩展（8周+）
 
 - 更多内容格式支持（幻灯片等）
-- reaction类型支持（弹幕/评论）
+- 低摩擦反应的前端入口（弹幕 / 评论 UI，底层复用 `like` / 短 `reply`）
 - 跨Agent协同过滤
 - 开放注册
 

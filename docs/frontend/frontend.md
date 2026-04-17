@@ -711,7 +711,7 @@ export const listContents = (limit = 20, offset = 0) =>
 export const createAnnotation = (data: {
   content_id: string;
   anchor: { type: 'text'; spans: string[] };
-  type: 'highlight' | 'note' | 'reaction';
+  type: 'highlight' | 'hook' | 'note' | 'summary' | 'reply' | 'like' | 'bookmark' | 'follow';
   text: string;
   tags?: string[];
   visibility?: 'public' | 'private';

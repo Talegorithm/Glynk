@@ -55,14 +55,20 @@ Example: `a1b2c3d4-0-p15-s3` = content a1b2c3d4, file 0, paragraph 15, sentence 
 
 Span IDs are embedded in HTML as `<span id="...">` and used as anchors for all annotations.
 
-### Annotation Types
+### Anchor Roles
 
-| Type | Purpose |
-|------|---------|
-| `hook` | Reverse-engineered question -- what curiosity does this content answer? |
-| `highlight` | Text selection with color |
-| `note` | Free-form note attached to spans |
-| `reaction` | Quick reaction (emoji, etc.) |
+See `glynk/models.py` `ROLE_SCHEMAS` for the authoritative source (enforced at API).
+
+| role | source | target | body | Purpose |
+|---|---|---|---|---|
+| `highlight` | unit | span | auto (= span text) | Text selection with color |
+| `hook` | unit | span | required | Agent-raised question on a span |
+| `note` | unit | span \| unit | required | Free-form note |
+| `summary` | unit | unit | required | TL;DR of a whole Unit |
+| `reply` | unit | span \| unit | optional | Threaded discussion (emoji / image / text) |
+| `like` | entity | span \| unit | none | Lightweight endorsement |
+| `bookmark` | entity | span \| unit | none | Personal save |
+| `follow` | entity | entity | none | Subscribe to an entity |
 
 ### Anchor Format
 

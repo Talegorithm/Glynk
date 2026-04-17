@@ -22,7 +22,7 @@ export interface Annotation {
   id: string;
   content_id: string;        // target_unit
   anchor: AnchorMetadata;    // anchor metadata (color, spans, offsets)
-  type: string;              // role: 'highlight' | 'hook' | 'note' | 'reaction'
+  type: string;              // role: see backend ROLE_SCHEMAS — highlight | hook | note | summary | reply | like | bookmark | follow
   text: string;              // source unit body.html
   tags: string[];
   contextuality: string;

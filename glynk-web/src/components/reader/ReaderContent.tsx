@@ -293,7 +293,7 @@ export function ReaderContent({ requestLogin }: ReaderContentProps) {
 
           const anchor = annotation.anchor as TextSelectionAnchor;
           const isMine = !annotation.author_id || annotation.author_id === uid;
-          const isNote = annotation.type === 'note' || annotation.type === 'reply' || annotation.type === 'reply_to';
+          const isNote = annotation.type === 'note' || annotation.type === 'reply';
           
           // 自己的标注用原色，别人的强制泛白/幽灵色 (ghost)
           const colorKey = isMine ? (anchor.color || 'yellow') : 'ghost';
@@ -336,7 +336,7 @@ export function ReaderContent({ requestLogin }: ReaderContentProps) {
                if (span && !span.hasAttribute('data-has-thread')) {
                  span.setAttribute('data-has-thread', 'true');
                  // 仅仅针对讨论串加上蓝色的虚线下划线做提示，他人的笔记只要高亮本身就能点击
-                 if (annotation.type === 'reply' || annotation.type === 'reply_to') {
+                 if (annotation.type === 'reply') {
                    span.classList.add('cursor-pointer', 'border-b-2', 'border-dashed', 'border-blue-400', 'hover:bg-blue-50', 'dark:hover:bg-blue-900/30');
                  }
                }
