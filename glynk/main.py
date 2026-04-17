@@ -10,7 +10,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from glynk.config import AppConfig
 from glynk.storage.postgres import PostgresStore
@@ -129,9 +129,14 @@ app.include_router(internal_router, prefix="/api")
 async def get_media(content_id: str, filename: str):
     config = AppConfig.from_env()
     file_path = config.storage.html_root / content_id / filename
-    if not file_path.exists():
-        return JSONResponse(status_code=404, content={"error": "File not found"})
-    return FileResponse(file_path)
+    if file_path.exists():
+        return FileResponse(file_path)
+    # 本地没有 —— 如果配了 REMOTE_FILE_BASE，重定向到远程
+    # （对应 RemoteFileStore：写走 /api/internal/files/，读走 /media/）
+    if config.remote_file_base:
+        remote_url = f"{config.remote_file_base.rstrip('/')}/media/{content_id}/{filename}"
+        return RedirectResponse(url=remote_url, status_code=307)
+    return JSONResponse(status_code=404, content={"error": "File not found"})
 
 
 @app.get("/health")
