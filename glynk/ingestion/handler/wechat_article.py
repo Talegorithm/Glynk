@@ -5,10 +5,10 @@ WeChatArticleHandler - 微信公众号文章
 """
 from pathlib import Path
 from bs4 import BeautifulSoup
-from typing import Dict, List, Optional
+from typing import Optional
 import logging
 
-from glynk.models import ParsedContent, TOCItem
+from glynk.models import ParsedContent
 
 logger = logging.getLogger(__name__)
 
@@ -40,13 +40,12 @@ class WeChatArticleHandler:
         author = self._extract_author(soup)
         content_html = self._extract_content(soup)
         cleaned_html = self._clean_wechat_elements(content_html)
-        toc = self._generate_toc(cleaned_html)
 
+        # TOC 不在此处生成 —— pipeline 会从标准化后的 HTML 自动扫 h1-h6 建多级 TOC
         return ParsedContent(
             raw_html_parts=[str(cleaned_html)],
             title=title,
             author=author,
-            toc=toc,
             content_type='wechat_article',
         )
 
@@ -91,18 +90,3 @@ class WeChatArticleHandler:
         for tag in content_soup.find_all(id='js_pc_qr_code'):
             tag.decompose()
         return content_soup
-
-    def _generate_toc(self, content_soup) -> List[TOCItem]:
-        for level in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
-            headings = content_soup.find_all(level)
-            if headings:
-                toc = []
-                for idx, heading in enumerate(headings):
-                    title_text = heading.get_text(strip=True)
-                    if not title_text:
-                        continue
-                    heading_id = heading.get('id') or f"heading-{idx}"
-                    heading['id'] = heading_id
-                    toc.append(TOCItem(title=title_text, href=f"0.html#{heading_id}"))
-                return toc
-        return []

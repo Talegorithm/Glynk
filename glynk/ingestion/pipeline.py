@@ -132,10 +132,14 @@ class IngestionPipeline:
 
             total_chars += result.sentence_count * 50
 
-        # 6. TOC mapping
+        # 6. TOC
         toc_list = [item.to_dict() for item in parsed.toc] if parsed.toc else []
         if toc_list and parsed.file_names:
+            # Handler 给了带 anchor 的 TOC（EPUB NCX 等），走 href → span_id 解析
             self._map_toc_to_span_ids(toc_list, parsed.file_names, unit_id)
+        elif not toc_list:
+            # Handler 没给 TOC → 从标准化 HTML 的 h1-h6 自动抽，直接拿 span_id
+            toc_list = self._extract_toc_from_headings(unit_id, len(processed_files))
 
         # 7. 创建作者 Entity（dormant）
         author_entity_id = self._get_or_create_author_entity(parsed.author)
@@ -257,6 +261,46 @@ class IngestionPipeline:
                 if i.get('children'): count(i['children'])
         count(toc_list)
         logger.info(f"TOC mapping: {stats['mapped']} mapped, {stats['failed']} failed")
+
+    def _extract_toc_from_headings(self, unit_id: str, file_count: int) -> list[dict]:
+        """
+        从标准化后的 HTML 扫 h1-h6 建多级 TOC。
+
+        SentenceAnnotator 会把 heading 改成 <h1 id="..-pN"><span id="..-pN-s1">text</span></h1>，
+        直接取内部 span 的 id 作为 href（就是 span_id），不需要再走 _map_toc_to_span_ids。
+
+        用栈算法按 level 嵌套 —— 支持跳级（# 直接到 ###）。
+        """
+        flat: list[tuple[int, str, str]] = []  # [(level, title, span_id)]
+        for idx in range(file_count):
+            html = self.file_store.read_html(unit_id, f"{idx}.html")
+            if html is None:
+                continue
+            soup = BeautifulSoup(html, 'html.parser')
+            for h in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
+                title = h.get_text(strip=True)
+                if not title:
+                    continue
+                span = h.find('span', id=True)
+                if not span:
+                    continue
+                level = int(h.name[1])
+                flat.append((level, title, span.get('id')))
+
+        if not flat:
+            return []
+
+        root: list[dict] = []
+        # stack: [(level, children_list)]，sentinel 0 表示 root
+        stack: list[tuple[int, list[dict]]] = [(0, root)]
+        for level, title, href in flat:
+            while stack and stack[-1][0] >= level:
+                stack.pop()
+            parent = stack[-1][1] if stack else root
+            node = {"title": title, "href": href, "level": level, "children": []}
+            parent.append(node)
+            stack.append((level, node["children"]))
+        return root
 
     def _calculate_file_hash(self, file_path: Path) -> str:
         sha256 = hashlib.sha256()
