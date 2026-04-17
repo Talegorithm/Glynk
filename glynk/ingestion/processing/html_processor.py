@@ -69,7 +69,6 @@ class HTMLProcessor:
         self._remove_web_clutter(soup)
         self._convert_decorative_spans(soup)
         self._clean_attributes(soup)
-        self._remove_embedded_toc(soup)
 
         # Phase 2: Rich Media Enhancement
         from glynk.ingestion.processing.rich_media_enhancer import RichMediaEnhancer
@@ -210,70 +209,6 @@ class HTMLProcessor:
                 if not tag.get_text(strip=True) and not tag.find_all() and not has_self_closing:
                     tag.decompose()
                     changed = True
-
-    def _remove_embedded_toc(self, soup: BeautifulSoup) -> None:
-        toc_keywords = [
-            'table of contents', 'contents', 'index',
-            '目录', '目次', '索引', '內容',
-            'chapters', '章节列表',
-        ]
-        chapter_keywords = [
-            'chapter', 'part', 'section',
-            '第', '章', 'preface', 'appendix', '附录', '序', '后记',
-        ]
-
-        for elem in soup.find_all(string=lambda text: text and any(
-            keyword in text.lower() for keyword in toc_keywords
-        )):
-            parent = elem.parent
-            if not parent:
-                continue
-
-            siblings = []
-            current = parent
-            for _ in range(15):
-                current = current.find_next_sibling()
-                if not current:
-                    break
-                siblings.append(current)
-
-            if len(siblings) < 5:
-                continue
-
-            links_count = 0
-            internal_links_count = 0
-            chapter_links_count = 0
-            for sibling in siblings:
-                links = sibling.find_all('a')
-                for link in links:
-                    links_count += 1
-                    href = link.get('href', '')
-                    text = link.get_text().strip().lower()
-                    if href and (href.startswith('#') or not href.startswith('http')):
-                        internal_links_count += 1
-                    if any(keyword in text for keyword in chapter_keywords):
-                        chapter_links_count += 1
-
-            elements_with_links = sum(1 for s in siblings if s.find('a'))
-            link_density = elements_with_links / len(siblings) if siblings else 0
-
-            is_toc = (
-                links_count >= 5
-                and link_density > 0.5
-                and internal_links_count / links_count > 0.8
-                and chapter_links_count >= 3
-            )
-
-            if is_toc:
-                to_remove = [parent]
-                for sibling in siblings:
-                    if sibling.find('a') or len(sibling.get_text().strip()) < 100:
-                        to_remove.append(sibling)
-                    else:
-                        break
-                for tag in to_remove:
-                    tag.decompose()
-                break
 
     def _process_images(self, soup: BeautifulSoup, epub_images: Dict[str, bytes]) -> None:
         for img in soup.find_all('img'):
