@@ -28,12 +28,11 @@ def set_services(anchor_service: AnchorService, retrieval_engine=None):
 class CreateAnchorRequest(BaseModel):
     target_unit: str
     target_span: str | None = None
-    role: str                         # highlight | hook | note | reaction | reply | ...
+    role: str                         # see models.ROLE_SCHEMAS (highlight/hook/note/summary/reply/like/bookmark/follow)
     metadata: dict = {}               # color, offsets, spans, ...
     text: str = ""                    # creates a source Unit if non-empty
     tags: list[str] = []
     visibility: str = "public"
-    in_reply_to: str | None = None    # 当 role=reply 时，被回复的 Unit ID；会额外创建 role=reply_to 的 anchor
 
 
 class BatchCreateRequest(BaseModel):
@@ -55,17 +54,19 @@ async def create_anchor(req: CreateAnchorRequest, user: dict = Depends(get_curre
     if _anchor_service is None:
         raise HTTPException(500, "Service not initialized")
 
-    result = await _anchor_service.create(
-        entity_id=user["entity_id"],
-        target_unit=req.target_unit,
-        target_span=req.target_span,
-        role=req.role,
-        metadata=req.metadata,
-        text=req.text,
-        tags=req.tags,
-        visibility=req.visibility,
-        in_reply_to=req.in_reply_to,
-    )
+    try:
+        result = await _anchor_service.create(
+            entity_id=user["entity_id"],
+            target_unit=req.target_unit,
+            target_span=req.target_span,
+            role=req.role,
+            metadata=req.metadata,
+            text=req.text,
+            tags=req.tags,
+            visibility=req.visibility,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     return result
 
 
@@ -75,18 +76,21 @@ async def create_batch(req: BatchCreateRequest, user: dict = Depends(get_current
     if _anchor_service is None:
         raise HTTPException(500, "Service not initialized")
 
-    results = await _anchor_service.create_batch(
-        entity_id=user["entity_id"],
-        items=[{
-            "target_unit": a.target_unit,
-            "target_span": a.target_span,
-            "role": a.role,
-            "metadata": a.metadata,
-            "text": a.text,
-            "tags": a.tags,
-            "visibility": a.visibility,
-        } for a in req.anchors],
-    )
+    try:
+        results = await _anchor_service.create_batch(
+            entity_id=user["entity_id"],
+            items=[{
+                "target_unit": a.target_unit,
+                "target_span": a.target_span,
+                "role": a.role,
+                "metadata": a.metadata,
+                "text": a.text,
+                "tags": a.tags,
+                "visibility": a.visibility,
+            } for a in req.anchors],
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     return {"created": len(results), "ids": [r["anchor_id"] for r in results]}
 
 

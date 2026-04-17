@@ -43,7 +43,7 @@ class Unit:
 
 @dataclass
 class Anchor:
-    """锚点：连接两个实体"""
+    """锚点：连接两个实体。role 的允许集合见 ROLE_SCHEMAS。"""
     id: str
     source_type: str             # unit | entity
     source_unit: str | None = None
@@ -52,9 +52,60 @@ class Anchor:
     target_unit: str | None = None
     target_span: str | None = None
     target_entity: str | None = None
-    role: str = ''               # highlight | hook | note | reaction | like | follow
+    role: str = ''               # see ROLE_SCHEMAS
     metadata: dict = field(default_factory=dict)
     created_at: datetime | None = None
+
+
+# ===== Role 分类与 schema =====
+#
+# role 描述 Anchor 的关系性质。每个 role 都约束了 (source_type, target_type, body)，
+# AnchorService 创建时按 ROLE_SCHEMAS 校验。Unit.metadata.role 是从对应 Anchor 复制的
+# 冗余字段，用于搜索过滤 —— 不要和 ROLE_SCHEMAS 分叉。
+#
+# body 语义：
+#   required - source Unit 必须有非空 body（hook/note/summary 的价值在于写了什么）
+#   optional - source Unit 可有 body 可无（reply 可以是 emoji / 图片 / 文字）
+#   auto     - body 存在且语义为 target span 的副本（highlight）
+#   none     - source 是 entity，不涉及 Unit body（like/bookmark/follow）
+
+ROLE_SCHEMAS: dict[str, dict] = {
+    'highlight': {'source': 'unit',   'target': ('span',),        'body': 'auto'},
+    'hook':      {'source': 'unit',   'target': ('span',),        'body': 'required'},
+    'note':      {'source': 'unit',   'target': ('span', 'unit'), 'body': 'required'},
+    'summary':   {'source': 'unit',   'target': ('unit',),        'body': 'required'},
+    'reply':     {'source': 'unit',   'target': ('span', 'unit'), 'body': 'optional'},
+    'like':      {'source': 'entity', 'target': ('span', 'unit'), 'body': 'none'},
+    'bookmark':  {'source': 'entity', 'target': ('span', 'unit'), 'body': 'none'},
+    'follow':    {'source': 'entity', 'target': ('entity',),      'body': 'none'},
+}
+
+
+def validate_anchor(role: str, source_type: str, target_type: str,
+                    has_body: bool) -> None:
+    """按 ROLE_SCHEMAS 校验 anchor 参数。不合法抛 ValueError。"""
+    schema = ROLE_SCHEMAS.get(role)
+    if not schema:
+        raise ValueError(
+            f"Unknown role {role!r}. Allowed: {sorted(ROLE_SCHEMAS.keys())}"
+        )
+    if source_type != schema['source']:
+        raise ValueError(
+            f"Role {role!r} requires source_type={schema['source']!r}, "
+            f"got {source_type!r}"
+        )
+    if target_type not in schema['target']:
+        raise ValueError(
+            f"Role {role!r} allows target_type in {schema['target']}, "
+            f"got {target_type!r}"
+        )
+    body = schema['body']
+    if body == 'required' and not has_body:
+        raise ValueError(f"Role {role!r} requires non-empty body")
+    if body == 'none' and has_body:
+        raise ValueError(
+            f"Role {role!r} has source=entity; body is not allowed"
+        )
 
 
 # ===== Ingestion =====

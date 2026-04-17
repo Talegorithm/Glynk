@@ -1,21 +1,21 @@
 """
 AnchorService - Anchor + Unit CRUD + 向量索引
 
-创建 Anchor 时，如果有 text，同时创建一个 source Unit。
+创建 Anchor 时，如果有 body，同时创建一个 source Unit。
+Role 的 (source, target, body) 约束见 models.ROLE_SCHEMAS。
 """
 from uuid import uuid4
 
-from glynk.models import expand_span_id
+from glynk.models import expand_span_id, validate_anchor
 from glynk.config import EmbeddingConfig
-from glynk.embedding.service import generate_embedding, generate_embeddings, should_embed
+from glynk.embedding.service import (
+    generate_embedding, generate_embeddings, maybe_embed, should_embed,
+)
 from glynk.annotation.vector_store import VectorStore
 from glynk.storage.postgres import PostgresStore
 
 
 class AnchorService:
-
-    # 这些 role 的 source Unit 内容值得 embed（再过 should_embed 长度检查）
-    EMBEDDING_ROLES = {'highlight', 'hook', 'note', 'reply', 'topic', 'summary'}
 
     def __init__(self, db: PostgresStore, vector_store: VectorStore,
                  embedding_config: EmbeddingConfig):
@@ -26,16 +26,14 @@ class AnchorService:
     async def create(self, entity_id: str, target_unit: str, role: str,
                      target_span: str = None, metadata: dict = None,
                      text: str = "", tags: list[str] = None,
-                     visibility: str = "public",
-                     in_reply_to: str = None) -> dict:
+                     visibility: str = "public") -> dict:
         """
         创建 Anchor。如果 text 非空，先创建 source Unit。
 
-        回复语义：当 role='reply' 且 in_reply_to 非空时，额外创建一条
-        role='reply_to' 的 anchor，从同一个 source Unit 指向 in_reply_to Unit。
-        这样 source Unit 同时承载"主题锚"（到原文 span）和"父节点锚"（到被回复的 Unit）。
+        Role 的合法 (source_type, target_type, body) 组合由 ROLE_SCHEMAS 定义。
+        不合法的组合直接 ValueError。
 
-        返回 {anchor_id, source_unit_id, reply_to_anchor_id?, ...}
+        返回 {anchor_id, source_unit_id, ...}
         """
         metadata = metadata or {}
         tags = tags or []
@@ -45,16 +43,17 @@ class AnchorService:
         if target_span:
             target_span = expand_span_id(target_span, target_unit)
 
-        source_unit_id = None
-        source_type = 'entity'
+        # Determine source/target types, then validate before creating anything
+        source_type = 'unit' if text else 'entity'
+        target_type = 'span' if target_span else 'unit'
+        validate_anchor(role, source_type, target_type, has_body=bool(text))
 
+        source_unit_id = None
         if text:
-            # Create source Unit for the annotation text
+            # Create source Unit for the annotation body
             source_unit_id = f"ann-{uuid4().hex[:12]}"
-            vector = None
             unit_metadata = {"tags": tags, "role": role}
-            if role in self.EMBEDDING_ROLES and should_embed(text, unit_metadata):
-                vector = await generate_embedding(text, self.embedding_config)
+            vector = await maybe_embed(text, self.embedding_config, unit_metadata)
 
             self.db.create_unit(
                 unit_id=source_unit_id,
@@ -67,15 +66,8 @@ class AnchorService:
                 vector=vector,
                 vector_text=text,
             )
-            source_type = 'unit'
-
-        # Determine target_type
-        target_type = 'span' if target_span else 'unit'
 
         anchor_id = f"anc-{uuid4().hex[:12]}"
-        if role == 'reply' and in_reply_to:
-            metadata["in_reply_to"] = in_reply_to
-
         self.db.create_anchor(
             anchor_id=anchor_id,
             source_type=source_type,
@@ -88,26 +80,9 @@ class AnchorService:
             metadata=metadata,
         )
 
-        # 回复语义：额外创建 reply_to anchor 指向被回复的 Unit
-        reply_to_anchor_id = None
-        if role == 'reply' and in_reply_to and source_unit_id:
-            reply_to_anchor_id = f"anc-{uuid4().hex[:12]}"
-            self.db.create_anchor(
-                anchor_id=reply_to_anchor_id,
-                source_type='unit',
-                source_unit=source_unit_id,
-                source_entity=None,
-                target_type='unit',
-                target_unit=in_reply_to,
-                target_span=None,
-                role='reply_to',
-                metadata={},
-            )
-
         return {
             "anchor_id": anchor_id,
             "source_unit_id": source_unit_id,
-            "reply_to_anchor_id": reply_to_anchor_id,
             "id": anchor_id,
             "role": role,
             "target_unit": target_unit,
@@ -115,23 +90,48 @@ class AnchorService:
             "metadata": metadata,
             "text": text,
             "tags": tags,
-            "in_reply_to": in_reply_to,
         }
 
     async def create_batch(self, entity_id: str, items: list[dict]) -> list[dict]:
-        """批量创建 Anchors + source Units"""
-        results = []
-        # Collect texts that need embedding（role 白名单 + 长度阈值）
-        texts_to_embed = []
-        item_indices = []
+        """批量创建 Anchors + source Units。每条按 ROLE_SCHEMAS 校验。"""
+        # Pre-pass: normalize + validate each item. Fail fast on invalid input.
+        normalized: list[dict] = []
         for i, item in enumerate(items):
-            text = item.get('text')
-            role = item.get('role')
-            if text and role in self.EMBEDDING_ROLES and should_embed(text, item.get('metadata')):
-                texts_to_embed.append(text)
-                item_indices.append(i)
+            metadata = item.get('metadata', {}) or {}
+            target_unit = item['target_unit']
+            target_span = item.get('target_span')
+            role = item['role']
+            text = item.get('text', '') or ''
+            tags = item.get('tags', []) or []
+            visibility = item.get('visibility', 'public')
 
-        vectors = {}
+            self._expand_metadata_spans(metadata, target_unit)
+            if target_span:
+                target_span = expand_span_id(target_span, target_unit)
+
+            source_type = 'unit' if text else 'entity'
+            target_type = 'span' if target_span else 'unit'
+            try:
+                validate_anchor(role, source_type, target_type, has_body=bool(text))
+            except ValueError as e:
+                raise ValueError(f"anchors[{i}]: {e}") from e
+
+            normalized.append({
+                'i': i, 'role': role, 'text': text, 'tags': tags,
+                'visibility': visibility, 'metadata': metadata,
+                'source_type': source_type, 'target_type': target_type,
+                'target_unit': target_unit, 'target_span': target_span,
+            })
+
+        # Embedding：批量调 Azure。只对通过 should_embed 的 text 排队。
+        texts_to_embed: list[str] = []
+        item_indices: list[int] = []
+        for n in normalized:
+            if n['text'] and should_embed(n['text'], {'tags': n['tags'], 'role': n['role']}):
+                texts_to_embed.append(n['text'])
+                item_indices.append(n['i'])
+
+        vectors: dict[int, list | None] = {}
         if texts_to_embed:
             vecs = await generate_embeddings(texts_to_embed, self.embedding_config)
             for idx, vec in zip(item_indices, vecs):
@@ -139,64 +139,39 @@ class AnchorService:
 
         units_to_create = []
         anchors_to_create = []
+        results = []
 
-        for i, item in enumerate(items):
-            metadata = item.get('metadata', {})
-            target_unit = item['target_unit']
-            target_span = item.get('target_span')
-            role = item['role']
-            text = item.get('text', '')
-            tags = item.get('tags', [])
-            visibility = item.get('visibility', 'public')
-
-            self._expand_metadata_spans(metadata, target_unit)
-            if target_span:
-                target_span = expand_span_id(target_span, target_unit)
-
+        for n in normalized:
             source_unit_id = None
-            source_type = 'entity'
-
-            if text:
+            if n['text']:
                 source_unit_id = f"ann-{uuid4().hex[:12]}"
                 units_to_create.append({
                     'id': source_unit_id,
                     'author_id': entity_id,
                     'origin': 'authored',
                     'shape': 'flat',
-                    'body': {"html": text},
-                    'visibility': {"type": visibility},
-                    'metadata': {"tags": tags, "role": role},
-                    'vector_text': text,
+                    'body': {"html": n['text']},
+                    'visibility': {"type": n['visibility']},
+                    'metadata': {"tags": n['tags'], "role": n['role']},
+                    'vector_text': n['text'],
                 })
-                source_type = 'unit'
 
-            target_type = 'span' if target_span else 'unit'
             anchor_id = f"anc-{uuid4().hex[:12]}"
-
             anchors_to_create.append({
                 'id': anchor_id,
-                'source_type': source_type,
+                'source_type': n['source_type'],
                 'source_unit': source_unit_id,
-                'source_entity': entity_id if source_type == 'entity' else None,
-                'target_type': target_type,
-                'target_unit': target_unit,
-                'target_span': target_span,
-                'role': role,
-                'metadata': metadata,
+                'source_entity': entity_id if n['source_type'] == 'entity' else None,
+                'target_type': n['target_type'],
+                'target_unit': n['target_unit'],
+                'target_span': n['target_span'],
+                'role': n['role'],
+                'metadata': n['metadata'],
             })
+            results.append({"anchor_id": anchor_id, "source_unit_id": source_unit_id})
 
-            results.append({
-                "anchor_id": anchor_id,
-                "source_unit_id": source_unit_id,
-            })
-
-        # Batch create units with vectors
-        unit_vectors = []
-        vec_idx = 0
-        for i, item in enumerate(items):
-            if item.get('text'):
-                unit_vectors.append(vectors.get(i))
-                vec_idx += 1
+        # Batch insert: unit_vectors 顺序必须和 units_to_create 对齐
+        unit_vectors = [vectors.get(n['i']) for n in normalized if n['text']]
 
         if units_to_create:
             self.db.create_units_batch(units_to_create, vectors=unit_vectors)

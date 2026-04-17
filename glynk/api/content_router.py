@@ -243,17 +243,13 @@ class CreateUnitRequest(BaseModel):
 @router.post("/units", status_code=201)
 async def create_unit(req: CreateUnitRequest, user: dict = Depends(get_current_user)):
     """创建 authored Unit（放下想法）。文本足够长时自动生成 embedding。"""
-    from glynk.embedding.service import generate_embedding, should_embed
+    from glynk.embedding.service import maybe_embed
 
     db = PostgresStore.get_instance()
     unit_id = f"u-{uuid4().hex[:12]}"
 
-    vector = None
-    vector_text = None
-    if should_embed(req.text, req.metadata):
-        cfg = AppConfig.from_env()
-        vector = await generate_embedding(req.text, cfg.embedding)
-        vector_text = req.text
+    cfg = AppConfig.from_env()
+    vector = await maybe_embed(req.text, cfg.embedding, req.metadata)
 
     db.create_unit(
         unit_id=unit_id,
@@ -263,7 +259,7 @@ async def create_unit(req: CreateUnitRequest, user: dict = Depends(get_current_u
         body={"html": req.text},
         metadata=req.metadata,
         vector=vector,
-        vector_text=vector_text,
+        vector_text=req.text if req.text else None,
     )
     return {"id": unit_id}
 

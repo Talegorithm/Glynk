@@ -58,6 +58,19 @@ async def generate_embedding(text: str, config: EmbeddingConfig) -> List[float] 
     return embeddings[0] if embeddings else None
 
 
+async def maybe_embed(text: str, config: EmbeddingConfig,
+                      metadata: dict | None = None) -> List[float] | None:
+    """
+    统一的 "该不该 embed + 要的话去 embed" 决策点。
+
+    callers 不再自己做 should_embed 判断 —— 只要想把一段文本关联到一个 Unit 的
+    vector 上，都走这里。返回 None 表示不合适 embed（太短 / skip 标记 / 未配置）。
+    """
+    if not should_embed(text, metadata):
+        return None
+    return await generate_embedding(text, config)
+
+
 async def generate_embeddings(texts: List[str], config: EmbeddingConfig) -> List[List[float]]:
     """
     批量生成 embedding 向量

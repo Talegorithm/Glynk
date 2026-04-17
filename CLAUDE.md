@@ -88,6 +88,34 @@ cd glynk-web && npm install && npm run dev
 - span_id格式：`{unit_id}-{file_idx}-p{n}-s{m}`
 - 内容寻址去重：`unit_id = sha256(file)[:16]`
 
+### Anchor role 与 schema
+
+Role 是 Anchor 关系的性质。允许取值与约束见 `models.ROLE_SCHEMAS`：
+
+| role | source | target | body |
+|---|---|---|---|
+| highlight | unit | span | auto（= target span 副本）|
+| hook | unit | span | required |
+| note | unit | span \| unit | required |
+| summary | unit | unit | required |
+| reply | unit | span \| unit | optional（emoji / 图片 / 文字皆可）|
+| like | entity | span \| unit | none |
+| bookmark | entity | span \| unit | none |
+| follow | entity | entity | none |
+
+创建 Anchor 时 `validate_anchor(role, source_type, target_type, has_body)` 强制校验；不合法 → 400。Unit.metadata.role 是 source Unit 从 Anchor role 冗余过来的字段，仅用于搜索过滤。
+
+### Embedding 规则
+
+一处决策：`embedding.service.maybe_embed(text, config, metadata)` 返回 vector 或 None。条件：
+
+- `metadata.skip_embedding` 为 true → 跳过
+- 有效字符（字母 / 数字 / CJK）< 30 → 跳过
+- 未配置 Azure OpenAI → 跳过
+- 其他情况 → 调 Azure 生成 3072 维向量
+
+Embedding 不看 role —— 任何带 body 的 authored Unit 自然参与检索。Ingested Unit 不设 `vector_text`，自然不 embed。
+
 ### Anchor metadata 格式
 
 Anchor 的 `metadata` 是 JSONB，格式由创建者决定：
