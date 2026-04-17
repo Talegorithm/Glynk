@@ -23,6 +23,11 @@ class RetrievalEngine:
 
     async def query(self, request: QueryRequest) -> QueryResponse:
         vector = await generate_embedding(request.text, self.embedding_config)
+        if vector is None:
+            raise RuntimeError(
+                "Embedding unavailable (AZURE_OPENAI_API_KEY / AZURE_OPENAI_ENDPOINT "
+                "not configured or request failed). Semantic search requires embeddings."
+            )
 
         filters = {}
         if request.roles:

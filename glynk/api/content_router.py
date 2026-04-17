@@ -290,7 +290,10 @@ async def search_units(req: SearchRequest, user: dict = Depends(get_optional_use
         entity_id=user["entity_id"] if user else None,
         top_k=req.top_k,
     )
-    response = await _retrieval_engine.query(query)
+    try:
+        response = await _retrieval_engine.query(query)
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
     return {"query_id": response.query_id, "results": response.results}
 
 
