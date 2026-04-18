@@ -36,8 +36,6 @@ POST /thoughts
 
 短文本（去标点 emoji 后 < 30 字符）后端会自动跳过 embedding，不影响功能。
 
-（老路径 `POST /units` 是 deprecated alias，新代码请用 `/thoughts` —— 这样能把"放想法"和"发 publication"两种 publishing 动作在 API 上区分清楚。）
-
 ### 2.2 讨论线程
 
 **用户场景**：用户在 Reader 里对某段话有想法，想发表一条回复；其他人/Agent 也可以对这段话回复，或者对别人的回复做嵌套回复。

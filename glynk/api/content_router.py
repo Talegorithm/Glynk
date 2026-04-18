@@ -1,15 +1,15 @@
 """
-Unit API (replaces content_router)
+Unit API —— 查询 / 阅读 / 检索 / 大纲 / 进度 / 会话；以及创建 thought（flat authored Unit）
 
+GET  /units                Unit 列表
 GET  /units/{id}           Unit 详情
 GET  /units/{id}/read      阅读（人 / AI）
 GET  /units/{id}/outline   AI 大纲
 PUT  /units/{id}/outline   提交 AI 大纲
-GET  /units                Unit 列表
 GET  /units/{id}/progress  阅读进度
 PUT  /units/{id}/progress  保存阅读进度
 POST /units/search         语义检索
-POST /units                创建 authored Unit
+POST /thoughts             创建 thought（= authored flat Unit "放下一个想法"）
 POST /reading-sessions     阅读会话
 PUT  /reading-sessions/{id}/end
 """
@@ -241,7 +241,6 @@ class CreateUnitRequest(BaseModel):
 
 
 @router.post("/thoughts", status_code=201)
-@router.post("/units", status_code=201, deprecated=True)  # alias
 async def create_thought(req: CreateUnitRequest, user: dict = Depends(get_current_user)):
     """创建 thought（= 一个 authored flat Unit，"放下一个想法"）。文本足够长时自动生成 embedding。"""
     from glynk.embedding.service import maybe_embed

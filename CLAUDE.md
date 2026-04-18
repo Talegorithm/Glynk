@@ -173,7 +173,6 @@ GET  /api/anchors                        → 查询
 GET  /api/anchors/thread                 → 某 span 下的讨论
 ```
 
-老端点 `POST /api/ingest*` 和 `POST /api/units`（创建）作为 deprecated alias 短期保留，行为完全等同。
 
 ### Markdown 发布
 

@@ -1,14 +1,10 @@
 """
 Publication API —— "发布一份可阅读 / 可被精细标注的内容"
 
-主路径：
   POST /publications                导入（URL 或路径）
   POST /publications/upload         上传文件导入
   POST /publications/media/init     媒体摄入：签发 OSS 上传 URL
   POST /publications/media/finalize 媒体摄入：转写并落地
-
-兼容老路径（deprecated alias，短期保留）：
-  POST /ingest, /ingest/upload, /ingest/media/*  —— 仍在用的调用方会被平滑迁移
 """
 import re
 import tempfile
@@ -42,7 +38,6 @@ class PublicationRequest(BaseModel):
 
 
 @router.post("/publications")
-@router.post("/ingest", deprecated=True)  # alias
 async def create_publication_from_url(
     req: PublicationRequest, user: dict = Depends(get_current_user)
 ):
@@ -115,7 +110,6 @@ def _validate_media_request(filename: str, file_hash: str, media_type: str) -> N
 
 
 @router.post("/publications/media/init", response_model=MediaInitResponse)
-@router.post("/ingest/media/init", response_model=MediaInitResponse, deprecated=True)
 async def create_publication_media_init(
     req: MediaInitRequest, user: dict = Depends(get_current_user)
 ):
@@ -136,7 +130,6 @@ async def create_publication_media_init(
 
 
 @router.post("/publications/media/finalize")
-@router.post("/ingest/media/finalize", deprecated=True)
 async def create_publication_media_finalize(
     req: MediaFinalizeRequest, user: dict = Depends(get_current_user)
 ):
@@ -185,7 +178,6 @@ async def create_publication_media_finalize(
 
 
 @router.post("/publications/upload")
-@router.post("/ingest/upload", deprecated=True)
 async def create_publication_from_upload(
     file: UploadFile = File(...),
     user: dict = Depends(get_current_user),

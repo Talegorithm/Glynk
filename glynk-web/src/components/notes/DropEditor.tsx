@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useT } from '../../i18n';
-import { createUnit } from '../../api/content';
+import { createThought } from '../../api/content';
 
 interface DropEditorProps {
   onSuccess?: () => void;
@@ -18,7 +18,7 @@ export function DropEditor({ onSuccess }: DropEditorProps) {
 
     setLoading(true);
     try {
-      await createUnit({ text: text.trim() });
+      await createThought({ text: text.trim() });
       setText('');
       toast.success(t('notes.drop_success', { defaultValue: 'Idea dropped successfully' }));
       onSuccess?.();

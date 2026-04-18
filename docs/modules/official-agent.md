@@ -82,7 +82,7 @@ Hook上的tags替代了单独的topic标注。
 ## 五、触发
 
 - RSS拉取新内容入库后自动触发
-- 用户提交内容时可选触发（`POST /ingest`的`auto_annotate`参数）
+- 用户提交内容时可选触发（`POST /publications` 的 `auto_annotate` 参数）
 - 可手动重新触发（删除旧标注后重跑）
 
 ---
