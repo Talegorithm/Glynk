@@ -103,7 +103,7 @@ Role 是 Anchor 关系的性质。允许取值与约束见 `models.ROLE_SCHEMAS`
 | bookmark | entity | span \| unit | none |
 | follow | entity | entity | none |
 
-创建 Anchor 时 `validate_anchor(role, source_type, target_type, has_body)` 强制校验；不合法 → 400。Unit.metadata.role 是 source Unit 从 Anchor role 冗余过来的字段，仅用于搜索过滤。
+创建 Anchor 时 `validate_anchor(role, source_type, target_type, has_body)` 强制校验；不合法 → 400。role 只存在 anchor 上，Unit 不复制 —— 搜索用 LEFT JOIN 到 anchors 按 `a.role` 过滤。
 
 ### Embedding 规则
 

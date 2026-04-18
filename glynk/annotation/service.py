@@ -59,9 +59,10 @@ class AnchorService:
 
         source_unit_id = None
         if text:
-            # Create source Unit for the annotation body
+            # Create source Unit for the annotation body.
+            # role 不复制到 Unit metadata —— role 是 Anchor 的属性，搜索通过 JOIN 过滤。
             source_unit_id = f"ann-{uuid4().hex[:12]}"
-            unit_metadata = {"tags": tags, "role": role}
+            unit_metadata = {"tags": tags}
             vector = await maybe_embed(text, self.embedding_config, unit_metadata)
 
             self.db.create_unit(
@@ -136,7 +137,7 @@ class AnchorService:
         texts_to_embed: list[str] = []
         item_indices: list[int] = []
         for n in normalized:
-            if n['text'] and should_embed(n['text'], {'tags': n['tags'], 'role': n['role']}):
+            if n['text'] and should_embed(n['text'], {'tags': n['tags']}):
                 texts_to_embed.append(n['text'])
                 item_indices.append(n['i'])
 
@@ -161,7 +162,7 @@ class AnchorService:
                     'shape': 'flat',
                     'body': {"html": n['text']},
                     'visibility': {"type": n['visibility']},
-                    'metadata': {"tags": n['tags'], "role": n['role']},
+                    'metadata': {"tags": n['tags']},
                     'vector_text': n['text'],
                 })
 

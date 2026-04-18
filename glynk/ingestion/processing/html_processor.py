@@ -104,13 +104,23 @@ class HTMLProcessor:
 
     def _sanitize_tags(self, soup: BeautifulSoup) -> None:
         dangerous_tags = ['script', 'iframe', 'embed', 'object', 'style']
+        danger_removed = 0
         for tag_name in dangerous_tags:
             for tag in soup.find_all(tag_name):
                 tag.decompose()
+                danger_removed += 1
 
+        unwrapped = 0
         for tag in soup.find_all():
             if tag.name not in self.ALLOWED_TAGS:
                 tag.unwrap()
+                unwrapped += 1
+
+        if danger_removed or unwrapped:
+            logger.info(
+                f"[{self.content_id}-{self.file_idx}] sanitize: "
+                f"removed {danger_removed} dangerous tags, unwrapped {unwrapped} unknown tags"
+            )
 
     def _remove_web_clutter(self, soup: BeautifulSoup) -> None:
         clutter_keywords = [
@@ -150,8 +160,12 @@ class HTMLProcessor:
                         break
 
         if removed_count > 0:
-            logger.info(f"Removed {removed_count} clutter elements")
+            logger.info(
+                f"[{self.content_id}-{self.file_idx}] clutter: "
+                f"removed {removed_count} elements by class/id keyword match"
+            )
 
+        link_heavy_removed = 0
         for div in list(soup.find_all('div')):
             links = div.find_all('a', recursive=True)
             if len(links) >= 3:
@@ -159,8 +173,15 @@ class HTMLProcessor:
                 link_text = ' '.join(a.get_text(strip=True) for a in links)
                 if total_text and len(link_text) / len(total_text) > 0.7:
                     div.decompose()
+                    link_heavy_removed += 1
+        if link_heavy_removed:
+            logger.info(
+                f"[{self.content_id}-{self.file_idx}] clutter: "
+                f"removed {link_heavy_removed} link-heavy divs (>70% text in links)"
+            )
 
     def _convert_decorative_spans(self, soup: BeautifulSoup) -> None:
+        by_kind: dict[str, int] = {}
         for span in soup.find_all('span'):
             style = span.get('style', '')
             new_tag_name = self._get_semantic_tag_for_style(style)
@@ -172,6 +193,12 @@ class HTMLProcessor:
                 for child in list(span.children):
                     new_tag.append(child)
                 span.replace_with(new_tag)
+                by_kind[new_tag_name] = by_kind.get(new_tag_name, 0) + 1
+        if by_kind:
+            detail = ", ".join(f"{v} → <{k}>" for k, v in by_kind.items())
+            logger.info(
+                f"[{self.content_id}-{self.file_idx}] decorative spans: {detail}"
+            )
 
     def _get_semantic_tag_for_style(self, style: str) -> Optional[str]:
         if not style:

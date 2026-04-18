@@ -279,9 +279,11 @@ async def search_units(req: SearchRequest, user: dict = Depends(get_optional_use
         raise HTTPException(500, "Service not initialized")
 
     from glynk.models import QueryRequest
+    # types=None → 不过滤 role（返回所有 Unit，含 standalone authored）
+    # types=[...] → 只搜有 anchor 且 role 匹配的
     query = QueryRequest(
         text=req.text,
-        roles=req.types or ["highlight", "hook"],
+        roles=req.types,
         unit_ids=req.content_ids,
         entity_id=user["entity_id"] if user else None,
         top_k=req.top_k,

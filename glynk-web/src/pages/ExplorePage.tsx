@@ -59,34 +59,51 @@ export default function ExplorePage() {
 
       <div className="space-y-4">
         {results.map((r) => (
-          <Link
-            key={r.id}
-            to={`/read/${r.content_id}`}
-            className="block p-5 border border-gray-200 dark:border-gray-800 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0 flex-1">
-                {r.content_title && (
-                  <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1 truncate">
-                    {r.content_title}
-                  </h3>
-                )}
-                <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-3 leading-relaxed">
-                  {r.text}
-                </p>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
-                  {t(`type.${r.type}`)}
-                </span>
-                <span className="text-xs text-gray-400 dark:text-gray-500 tabular-nums">
-                  {r.score.toFixed(2)}
-                </span>
-              </div>
-            </div>
-          </Link>
+          <ResultCard key={r.id} result={r} t={t} />
         ))}
       </div>
     </div>
   );
+}
+
+function ResultCard({ result: r, t }: { result: SemanticSearchResult; t: ReturnType<typeof useT> }) {
+  const cardInner = (
+    <div className="flex items-start justify-between gap-4">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap line-clamp-5">
+          {r.text}
+        </p>
+        {r.target && r.content_title && (
+          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 truncate">
+            {r.default_view === 'target' ? t('explore.at_source', { defaultValue: '在' }) : t('explore.on_source', { defaultValue: '关于' })}{' '}
+            <span className="text-gray-700 dark:text-gray-300">{r.content_title}</span>
+          </p>
+        )}
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        {r.type && (
+          <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
+            {t(`type.${r.type}`, { defaultValue: r.type })}
+          </span>
+        )}
+        <span className="text-xs text-gray-400 dark:text-gray-500 tabular-nums">
+          {r.score.toFixed(2)}
+        </span>
+      </div>
+    </div>
+  );
+
+  const cardClasses =
+    'block p-5 border border-gray-200 dark:border-gray-800 rounded-xl transition-colors';
+
+  // 有 target → 点击跳原文语境（browse_url 指向 /read/...）。
+  // 没 target（standalone authored Unit）→ 卡片不可点（/u/{id} 路由待建）。
+  if (r.target) {
+    return (
+      <Link to={r.browse_url} className={`${cardClasses} hover:bg-gray-50 dark:hover:bg-gray-900`}>
+        {cardInner}
+      </Link>
+    );
+  }
+  return <div className={cardClasses}>{cardInner}</div>;
 }

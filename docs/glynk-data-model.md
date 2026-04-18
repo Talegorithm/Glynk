@@ -86,7 +86,7 @@ Role 的允许取值和 (source, target, body) 约束在 [`glynk/models.py`](../
 | bookmark | entity | span \| unit | none | 人 |
 | follow | entity | entity | none | 人 |
 
-Unit.metadata.role 是 source Unit 从 Anchor role 冗余过来的，仅用于搜索过滤 —— 不要和 ROLE_SCHEMAS 分叉。
+role 只存在 anchor 上，Unit 不复制。搜索需要按 role 过滤时，用 LEFT JOIN 到 anchors 表走 `a.role`。
 
 ---
 

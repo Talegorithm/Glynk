@@ -14,8 +14,19 @@ from glynk.config import EmbeddingConfig
 
 logger = logging.getLogger(__name__)
 
-# 字符数阈值：去标点 emoji 后少于此值则不 embed
+# 有效字符（字母/数字/CJK）长度阈值
 MIN_EMBED_CHARS = 30
+# 上限：超过跳过 embed 而不截断。8192 token 的 Azure 硬上限对 CJK ≈ 8k 字，这里
+# 留 4x margin，避免因少量 token 超限整批失败，也避免单向量语义被稀释。
+MAX_EMBED_CHARS = 2000
+
+
+def _meaningful_length(text: str) -> int:
+    """剔除标点 / 空白 / emoji 后的字符数（字母 + 数字 + CJK 等 L 类）。"""
+    return sum(
+        1 for c in text
+        if c.isalnum() or unicodedata.category(c).startswith("L")
+    )
 
 
 def should_embed(text: str, metadata: dict | None = None) -> bool:
@@ -25,21 +36,28 @@ def should_embed(text: str, metadata: dict | None = None) -> bool:
     不 embed 的条件：
     - metadata.skip_embedding = True（显式标记）
     - 文本为空
-    - 有效字符（字母/数字/CJK）数 < MIN_EMBED_CHARS
+    - 有效字符数 < MIN_EMBED_CHARS（太短，召回意义不大）
+    - 有效字符数 > MAX_EMBED_CHARS（太长，单向量会语义糊掉；也避免踩 Azure token 上限）
 
-    短回复、纯反应、emoji 串都会被跳过。vector 字段保持 null，未来可补 embed。
+    短反应 / emoji 串 / 长篇 essay 都会被跳过。vector 留 null，
+    前者用户不在乎，后者用户想被搜要自己拆成多段 authored Unit。
     """
     if metadata and metadata.get("skip_embedding"):
         return False
     if not text or not text.strip():
         return False
 
-    # 保留字母数字和 CJK 字符，剔除标点、空白、emoji 等
-    meaningful = [
-        c for c in text
-        if c.isalnum() or unicodedata.category(c).startswith("L")
-    ]
-    return len(meaningful) >= MIN_EMBED_CHARS
+    n = _meaningful_length(text)
+    if n < MIN_EMBED_CHARS:
+        return False
+    if n > MAX_EMBED_CHARS:
+        logger.warning(
+            f"Text too long for single embedding ({n} meaningful chars > "
+            f"{MAX_EMBED_CHARS}); skipping. Split into shorter Units if you "
+            f"want it searchable."
+        )
+        return False
+    return True
 
 
 def _create_client(config: EmbeddingConfig) -> AzureOpenAI:

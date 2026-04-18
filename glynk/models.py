@@ -60,8 +60,8 @@ class Anchor:
 # ===== Role 分类与 schema =====
 #
 # role 描述 Anchor 的关系性质。每个 role 都约束了 (source_type, target_type, body)，
-# AnchorService 创建时按 ROLE_SCHEMAS 校验。Unit.metadata.role 是从对应 Anchor 复制的
-# 冗余字段，用于搜索过滤 —— 不要和 ROLE_SCHEMAS 分叉。
+# AnchorService 创建时按 ROLE_SCHEMAS 校验。role 只存在 anchor 上，Unit 不复制 ——
+# 搜索需要按 role 过滤时走 LEFT JOIN 到 anchors 表。
 #
 # body 语义：
 #   required - source Unit 必须有非空 body（hook/note/summary 的价值在于写了什么）
