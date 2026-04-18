@@ -62,8 +62,8 @@ uvicorn glynk.main:app --host 0.0.0.0 --port 8000
 ```
 
 ```bash
-# 导入任意文档
-curl -X POST http://localhost:8000/ingest \
+# 发布任意文档（书 / 文章 / md / 转写稿 ...）
+curl -X POST http://localhost:8000/api/publications \
   -H "Authorization: Bearer <token>" \
   -d '{"source": "path/to/book.epub"}'
 
@@ -82,11 +82,13 @@ curl "http://localhost:8000/content/{id}/read?view=human&lang=zh"    # 人用
 
 | 端点 | 说明 |
 |---|---|
-| `POST /ingest` | 提交 URL 或文件。返回结构化内容供 Agent 使用。 |
-| `GET /content/{id}/read` | 阅读内容。`?view=ai` 给 Agent，`?view=human` 给人。`?lang=zh` 翻译。 |
-| `POST /query` | 在内容库中检索。 |
-| `POST /annotate` | 添加标注（高亮、笔记、主题等）。 |
-| `GET /annotations` | 你的阅读历史。 |
+| `POST /api/publications` | 通过 URL 发布为可阅读、可精细标注的 Unit。 |
+| `POST /api/publications/upload` | 同上，从本地文件（epub/pdf/html/md/zip）发布。 |
+| `POST /api/thoughts` | 放下一个想法（flat authored Unit，不支持 span 级标注）。 |
+| `GET /api/units/{id}/read` | 阅读某个 Unit（publication 按 span 分页）。 |
+| `POST /api/units/search` | 跨所有 Unit 的语义检索。 |
+| `POST /api/anchors` | 创建标注（highlight / hook / note / summary / reply / like / bookmark / follow）。 |
+| `GET /api/anchors` | 查询标注。 |
 | `POST /sources` | 订阅 RSS，自动定时导入。 |
 
 运行后访问 `/docs` 查看完整 API 文档。

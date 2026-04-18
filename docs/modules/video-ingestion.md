@@ -1,294 +1,128 @@
-# 视频/播客摄入模块
+# 视频/播客摄入
 
-> 详细设计：转录策略、听悟 API 集成、HTML 输出格式。
-> 架构总览见 `../architecture.md` 的 VideoHandler 部分。
+> 音视频 → 带时间戳的 HTML。转写属于后端（`../requirements.md` §3.6 "平台不跑 LLM" 的例外：ASR 作为结构化处理）。
 
----
+## 入口
 
-## 一、转录策略
+两条路径：
 
-优先使用官方字幕（零成本），无字幕时调阿里云听悟离线转写。
+1. **有官方转写** — Agent 找到/整理为 md，走 `/api/publications/upload`（MarkdownHandler）。本模块不涉及。
+2. **无官方转写** — Agent 提交媒体文件，后端转写。下文所述。
+
+## API 契约
+
+### `POST /api/publications/media/init`
+
+请求：
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `filename` | str | 含扩展名，必须为 mp3/wav（见下文格式要求） |
+| `file_hash` | str | sha256 hex（64 字符），agent 计算，用于去重 |
+| `media_type` | `"audio" \| "video"` | |
+| `title` | str | |
+| `source_url` | str? | 官方页面 URL（可选） |
+| `author` | str? | |
+
+响应：
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `unit_id` | str | `file_hash[:16]` |
+| `upload_url` | str? | OSS presigned PUT，30min 有效；`existing=true` 时为 null |
+| `existing` | bool | 命中去重 |
+
+### `POST /api/publications/media/finalize`
+
+Agent 上传完成后调用。后端同步完成整条流水线并返回 IngestResult。
+
+请求：所有 init 的字段 + `unit_id`。（无状态：后端不在 init 和 finalize 之间保存元数据。）
+
+响应：与 `/api/publications` 的 IngestResult 相同。
+
+## 后端流水线
 
 ```
-1. 官方字幕（零成本，最快）
-   YouTube → yt-dlp 提取CC字幕（SRT/VTT）
-   Bilibili → API提取字幕JSON
-   播客RSS → transcript字段（如有）
-   用户上传 → 附带的SRT/VTT/ASS文件
-
-2. 阿里云听悟（兜底，需API调用）
-   调用听悟离线转写 API
-   支持：mp3/wav/mp4/mkv/webm 等主流格式（≤6GB，≤6h）
-   返回：逐句时间戳 + 说话人识别 + 自动分章节 + 口语书面化
+OSS 对象（agent 已上传）
+  → presigned GET URL
+  → qwen3-asr-flash-filetrans (enable_words=true, language_hints=["zh","en"])
+  → 句/字级时间戳 JSON
+  → 生成 HTML（见下）
+  → 下载 OSS 对象到 /media/{unit_id}/{filename}
+  → 归档 ASR JSON 到 /media/{unit_id}/asr_raw.json
+  → 删除 OSS 临时对象
+  → 写 Unit
 ```
 
----
-
-## 二、数据结构
-
-```python
-@dataclass
-class Sentence:
-    text: str
-    start_ms: int           # 起始时间（毫秒）
-    end_ms: int             # 结束时间（毫秒）
-    speaker_id: str | None  # 说话人ID（如有）
-
-@dataclass
-class Chapter:
-    headline: str           # 章节标题
-    summary: str            # 章节摘要
-    start_ms: int
-    end_ms: int
-
-@dataclass
-class TranscriptionResult:
-    sentences: list[Sentence]
-    chapters: list[Chapter]
-    duration_ms: int
-    language: str
-```
-
----
-
-## 三、听悟 API 集成（format_utils/audio.py）
-
-### 3.1 调用流程
-
-```python
-async def transcribe_with_tingwu(file_url: str, config: TranscriptionConfig) -> TranscriptionResult:
-    """
-    调用阿里云听悟离线转写。
-
-    API: PUT /openapi/tingwu/v2/tasks?type=offline
-    域名: tingwu.cn-beijing.aliyuncs.com
-    版本: 2023-09-30
-
-    流程：
-      1. CreateTask → 返回 TaskId
-      2. 轮询 GET /openapi/tingwu/v2/tasks/{TaskId}（间隔1分钟）
-         直到 TaskStatus = 'COMPLETED' | 'FAILED'
-      3. 下载 Result.Transcription URL → 解析转写JSON
-      4. 下载 Result.AutoChapters URL → 解析章节JSON
-    """
-```
-
-### 3.2 CreateTask 请求参数
-
-```python
-{
-    "AppKey": "{config.tingwu_app_key}",
-    "Input": {
-        "FileUrl": "https://...",          # 必须是公网HTTP URL
-        "SourceLanguage": "cn",            # cn | en | auto | multilingual
-        "TaskKey": "glynk_{content_id}"
-    },
-    "Parameters": {
-        "Transcription": {
-            "DiarizationEnabled": True,    # 说话人识别
-            "Diarization": {
-                "SpeakerCount": 0          # 0=自动判断人数
-            }
-        },
-        "AutoChaptersEnabled": True,       # 自动分章节
-        "TextPolishEnabled": True          # 口语书面化
-    }
-}
-```
-
-注意事项：
-- FileUrl 必须是公网可访问的 HTTP/HTTPS 地址（推荐阿里云 OSS 预签名 URL）
-- 本地文件需先上传到 OSS 再提交 URL
-- 签名 URL 有效期建议 ≥3h（听悟任务可能排队）
-- QPS 限制：CreateTask 20/s，GetTaskInfo 100/s
-
-### 3.3 转写结果结构（Transcription JSON）
-
-```json
-{
-    "TaskId": "...",
-    "Transcription": {
-        "AudioInfo": {
-            "Size": 670663,
-            "Duration": 10394,       // 毫秒
-            "SampleRate": 48000,
-            "Language": "cn"
-        },
-        "Paragraphs": [
-            {
-                "ParagraphId": "...",
-                "SpeakerId": "1",    // 说话人ID
-                "Words": [
-                    {
-                        "Id": 10,
-                        "SentenceId": 1,     // 同一SentenceId的words组装成一句话
-                        "Start": 4970,       // 毫秒
-                        "End": 5560,
-                        "Text": "您好，"
-                    },
-                    {
-                        "Id": 20,
-                        "SentenceId": 1,
-                        "Start": 5730,
-                        "End": 6176,
-                        "Text": "我是"
-                    }
-                ]
-            }
-        ]
-    }
-}
-```
-
-### 3.4 章节结果结构（AutoChapters JSON）
-
-```json
-{
-    "TaskId": "...",
-    "AutoChapters": [
-        {
-            "Id": 1,
-            "Start": 1930,          // 毫秒
-            "End": 283874,
-            "Headline": "阿里巴巴云栖大会及技术责任",
-            "Summary": "云栖大会作为中国产业界的盛会..."
-        },
-        {
-            "Id": 2,
-            "Start": 284050,
-            "End": 452084,
-            "Headline": "云计算：推动中国走向现代化",
-            "Summary": "平头哥围绕云计算场景..."
-        }
-    ]
-}
-```
-
-### 3.5 解析逻辑
-
-```python
-def parse_tingwu_result(transcription_json: dict, chapters_json: dict) -> TranscriptionResult:
-    """
-    将听悟返回的 JSON 转换为 TranscriptionResult。
-
-    转写解析：
-      Paragraphs → Words，按 SentenceId 聚合为 Sentence 列表。
-      每个 Sentence:
-        text = 同一 SentenceId 的所有 words.Text 拼接
-        start_ms = 该句第一个 word.Start
-        end_ms = 该句最后一个 word.End
-        speaker_id = 所属 Paragraph.SpeakerId
-
-    章节解析：
-      AutoChapters[] 直接映射为 Chapter 列表。
-    """
-```
-
----
-
-## 四、字幕解析（format_utils/subtitle.py）
-
-```python
-def parse_subtitle(subtitle_path: Path) -> list[Sentence]:
-    """
-    解析 SRT/VTT/ASS 字幕文件为 Sentence 列表。
-    根据扩展名选择解析器（pysrt / webvtt-py）。
-    每条字幕 → 一个 Sentence(text, start_ms, end_ms, speaker_id=None)
-    """
-```
-
----
-
-## 五、VideoHandler 流程（handler/video.py）
-
-```python
-class VideoHandler:
-    async def parse(self, file_path: Path) -> ParsedContent:
-        # 1. 尝试提取官方字幕（零成本）
-        subtitle = self._extract_subtitle(file_path, self.source_url)
-        #   YouTube/B站 → yt-dlp --write-sub --skip-download
-        #   播客RSS → transcript字段
-        #   用户上传 → 同名SRT/VTT/ASS文件
-
-        if subtitle:
-            sentences = parse_subtitle(subtitle)
-            chapters = self._guess_chapters(sentences)  # 按时间间隔猜测章节
-        else:
-            result = await transcribe_with_tingwu(self.file_url, self.config)
-            sentences = result.sentences
-            chapters = result.chapters
-
-        # 2. 生成HTML
-        html = self._build_html(sentences, chapters, media_src=self.source_url)
-
-        return ParsedContent(
-            raw_html_parts=[html],
-            file_names=["0.html"],
-            title=self._extract_title(),
-            content_type="video",
-        )
-```
-
----
-
-## 六、输出 HTML 结构
+## HTML 输出契约
 
 ```html
-<!-- 媒体源元信息 -->
-<meta name="media-src" content="https://youtube.com/watch?v=xxx" />
-<meta name="media-type" content="video" />
-
-<!-- 标题 -->
-<h1>Lex Fridman Podcast #401</h1>
-<p class="meta">Elon Musk · 2024-01-15 · 2:03:15</p>
-
-<!-- 章节1（可折叠）-->
-<details open>
-  <summary data-time-start="0" data-time-end="1230">
-    <h2>开场：为什么做SpaceX</h2>
-  </summary>
-  <p class="chapter-summary">SpaceX的起源和早期挑战...</p>
-
-  <p>
-    <span id="xxx-0-p1-s1" data-time-start="0.0" data-time-end="3.2"
-      >大家好，今天请到的嘉宾是Elon Musk。</span>
-    <span id="xxx-0-p1-s2" data-time-start="3.2" data-time-end="7.8"
-      >我们要聊的第一个话题是SpaceX的起源。</span>
-  </p>
-
-  <p>
-    <span id="xxx-0-p2-s1" data-time-start="8.0" data-time-end="15.3"
-      >其实最开始我并没有想做火箭公司。</span>
-  </p>
-</details>
-
-<!-- 章节2 -->
-<details>
-  <summary data-time-start="1230" data-time-end="2850">
-    <h2>创业决策：如何面对不确定性</h2>
-  </summary>
-  <p class="chapter-summary">讨论了创业者面对不确定性时的...</p>
-  <!-- sentences... -->
-</details>
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="media-src" content="/media/{unit_id}/{filename}">
+  <meta name="media-type" content="audio">
+  <title>{title}</title>
+</head>
+<body>
+  <h1>{title}</h1>
+  <p><span id="{unit_id}-0-p1-s1"
+           data-time-start="2.124"
+           data-time-end="3.884">这么快看完了？</span></p>
+  <p><span id="{unit_id}-0-p2-s1"
+           data-time-start="7.564"
+           data-time-end="7.724">小会。</span></p>
+  ...
+</body>
+</html>
 ```
 
-**关键约定**：
-- `data-time-start` / `data-time-end` 单位为**秒**（从听悟毫秒转换）
-- span_id 格式不变：`{content_id}-{file_idx}-p{para}-s{sent}`，和纯文本内容统一
-- 章节用 `<details><summary>` 原生可折叠，`<summary>` 也带时间范围
-- 章节摘要（如有）用 `<p class="chapter-summary">` 标注
-- 无章节时所有 sentences 直接输出，不包裹 `<details>`
-- 媒体源在 `<meta>` 中，前端解析后渲染播放器
+- 每条 ASR sentence → 独立 `<p><span>`，一句一段
+- 时间戳单位：秒（float，ms 除以 1000）
+- `span_id` 沿用既有格式 `{unit_id}-{file_idx}-p{n}-s{m}`
+- 词级时间戳不进 HTML，保留在 `asr_raw.json` 中，阅读器需要时再 overlay
 
----
+## Unit metadata
 
-## 七、前端布局
+标准字段之外新增：
 
-详见 `../frontend/frontend.md` 的「视频/播客内容的阅读器布局」章节。
+```jsonc
+{
+  "media": {
+    "type": "audio" | "video",
+    "filename": "clip.mp3",
+    "duration_ms": 60000,
+    "asr_model": "qwen3-asr-flash-filetrans"
+  }
+}
+```
 
-核心交互：
-- PC 左右分栏（视频 | 图文），移动端视频悬浮 PiP
-- 点击文字 → 视频跳转到对应 `data-time-start`
-- 视频播放 → 文字自动跟随高亮
-- 章节折叠/展开：`<details>` 原生支持
-- 文字标注和纯文本模式完全一致（anchor.spans 指向 span_id）
+`source_type` 设为 `"audio"` 或 `"video"`。
+
+## 格式要求
+
+DashScope `qwen3-asr-flash-filetrans` 接受 mp3/wav；m4a/aac 等容器会报 "audio format illegal"。**Agent 必须在上传前转成 mp3**：
+
+```bash
+ffmpeg -i in.m4a -ar 16000 -ac 1 -c:a libmp3lame -b:a 64k out.mp3
+```
+
+## 依赖与配置
+
+Python: `oss2`, `dashscope`（新增到 requirements.txt）。系统：无（ffmpeg 在 agent 侧）。
+
+环境变量：
+```
+OSS_ENDPOINT=https://oss-cn-beijing.aliyuncs.com
+OSS_BUCKET=qwen-transcribe
+OSS_ACCESS_KEY_ID=...
+OSS_ACCESS_KEY_SECRET=...
+DASHSCOPE_API_KEY=...
+```
+
+## 非目标（后续再议）
+
+- 说话人分离（Qwen3 不出，要补 pyannote 或降级听悟）
+- 章节自动分段
+- 口语润色（disfluency removal / restructure）——Qwen3 原文可用度已够，引入 LLM 会破坏"后端不跑 LLM"边界
+- 词级时间戳的前端渲染（数据已留好）
+- 超长媒体分 file_idx 多文件（MVP 全部塞 0.html）

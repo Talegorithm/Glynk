@@ -54,7 +54,7 @@ glynk/
 │   ├── ingest_router.py    # /ingest
 │   └── ...
 ├── agent/                  # 官方Agent工具
-│   └── tools.py            # list_units/read_unit/create_anchors/search_units/save_unit
+│   └── tools.py            # list_units/read_unit/create_anchors/search_units/save_thought
 └── worker/rss_fetcher.py   # RSS拉取
 
 glynk-web/src/
@@ -128,26 +128,56 @@ Anchor 的 `metadata` 是 JSONB，格式由创建者决定：
 { "type": "text", "spans": [...], "color": "ghost" }
 ```
 
+### Unit 的两种 publishing 形态
+
+平台里所有内容都是 Unit，但有**两种 publishing 行为**，对应不同的创建入口：
+
+- **publication** = 可阅读 / 可精细标注的作品（书、文章、转写稿、用户 md）
+  - `shape=structured`，HTML 文件落盘，span 级 ID，TOC
+  - 内容寻址（`unit_id = sha256(content)[:16]`），同内容幂等去重
+  - 作者可以是第三方（dormant Entity），导入者记在 `metadata.imported_by`
+- **thought** = 一段 authored 的想法 / 评论 / 随手记录
+  - `shape=flat`，body 是 html 字符串，无 span ID
+  - 随机 UUID，两条相同文字的 thought 是独立 Unit
+  - 作者永远是发布者本人
+  - 标注的 source Unit 也走 thought 路径
+
+读取、查询、搜索、挂 anchor、权限都用同一套（`GET /api/units/*`、`POST /api/anchors/*`）—— Unit 这一层是统一的。
+
 ### API 路径
 
 ```
-POST /api/auth/register          → Entity + auth
+POST /api/auth/register                  → Entity + auth
 GET  /api/auth/me
-GET  /api/units                  → 列出
-GET  /api/units/{id}             → 详情
-GET  /api/units/{id}/read        → 阅读
-PUT  /api/units/{id}/outline     → AI大纲
-POST /api/units/search           → 语义检索
-POST /api/anchors                → 创建标注
-POST /api/anchors/batch          → 批量
-GET  /api/anchors                → 查询
-POST /api/ingest                 → 摄入（URL）
-POST /api/ingest/upload          → 摄入（文件上传，支持 epub/pdf/html/md/zip）
+
+# Unit 查询（二合一，publication 和 thought 都在这里）
+GET  /api/units                          → 列出（可按 origin / author_id 过滤）
+GET  /api/units/{id}                     → 详情
+GET  /api/units/{id}/read                → 阅读（按 span 分页）
+PUT  /api/units/{id}/outline             → AI 大纲
+POST /api/units/search                   → 语义检索
+
+# 创建 publication（发布可阅读内容）
+POST /api/publications                   → 从 URL 导入
+POST /api/publications/upload            → 从文件（epub/pdf/html/md/zip）导入
+POST /api/publications/media/init        → 音频/视频：拿 OSS presigned URL
+POST /api/publications/media/finalize    → 音频/视频：后端转写 + 建 HTML
+
+# 创建 thought（放下想法）
+POST /api/thoughts                       → 纯文本想法
+
+# Anchor
+POST /api/anchors                        → 创建标注
+POST /api/anchors/batch                  → 批量
+GET  /api/anchors                        → 查询
+GET  /api/anchors/thread                 → 某 span 下的讨论
 ```
 
-### Markdown 上传
+老端点 `POST /api/ingest*` 和 `POST /api/units`（创建）作为 deprecated alias 短期保留，行为完全等同。
 
-用户自制内容通过 Markdown 上传。支持 frontmatter（title/author）和本地图片引用。上传脚本在 `skills/glk-ingest/upload_md.py`。
+### Markdown 发布
+
+用户自制内容通过 Markdown 上传成 publication。支持 frontmatter（title/author）和本地图片引用。上传脚本 `skills/glk-add/upload_md.py`。
 
 ### 图片路径
 

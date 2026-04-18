@@ -55,47 +55,53 @@ POST   /auth/register    → 创建 Entity + auth record，返回 token
 GET    /auth/me           → 当前用户 Entity
 ```
 
-### Unit CRUD
+### Unit CRUD + 两种发布入口
 
 ```
-POST   /units             → 创建 authored Unit（放下想法）
-GET    /units             → 列出自己的 Units
+# 创建入口分两类，反映两种 publishing 行为：
+POST   /publications            → 从 URL 发布 publication（structured）
+POST   /publications/upload     → 从文件（epub/pdf/html/md/zip）发布 publication
+POST   /publications/media/*    → 音视频 publication（转写 + 时间戳）
+POST   /thoughts                → 放下一个 thought（flat authored Unit）
+
+# 老路径保留为 deprecated alias：
+POST   /ingest, /ingest/upload, /ingest/media/*   → 等价于 /publications*
+POST   /units                                      → 等价于 /thoughts
+
+# 查询 / 读取 / 搜索 / 更新都对 Unit 统一（不分 publication / thought）：
+GET    /units             → 列出（可按 origin / author_id 过滤）
 GET    /units/{id}        → Unit 详情
 DELETE /units/{id}        → 删除（ownership check）
-
+GET    /units/{id}/read   → 读取内容（publication 按 span 分页，thought 整条返回）
 POST   /units/search      → 语义检索（跨所有 Units）
 ```
 
-### Unit 阅读（替代原来的 /content/* 系列）
+### Unit outline
 
 ```
-GET    /units/{id}/read    → 读取 Unit 内容（file 级 / chunk 级）
 GET    /units/{id}/outline → 获取 AI outline
 PUT    /units/{id}/outline → 提交 AI outline
 ```
 
-### Anchor CRUD（替代原来的 /annotate 系列）
+### Anchor CRUD
 
 ```
 POST   /anchors            → 创建 Anchor（标注 / 回复 / like / ...）
 POST   /anchors/batch      → 批量创建
 GET    /anchors             → 查询（按 target_unit / role / entity 过滤）
+GET    /anchors/thread      → 某 span 下的讨论（按话题锚点扁平返回）
 PATCH  /anchors/{id}        → 更新
 DELETE /anchors/{id}        → 删除
-
-# "对某个 Unit 的标注" = 查询 anchors where target_unit = X
 ```
 
-### 兼容 / 透传
+### 其他
 
 ```
-POST   /ingest             → 调用改写后的 pipeline（产出 Unit）
-POST   /ingest/upload      → 同上
 GET    /units/{id}/progress → 阅读进度
 PUT    /units/{id}/progress → 保存阅读进度
 POST   /reading-sessions   → 开始会话
 PUT    /reading-sessions/{id}/end → 结束会话
-POST   /sources            → RSS 源管理（逻辑不变，FK 改 entity）
+POST   /sources            → RSS 源管理
 ```
 
 **依赖**：任务 1、任务 2
@@ -115,7 +121,7 @@ submit_annotations → create_anchors(unit_id, anchors_json, context)
 
 # 新增
 search_units(query, limit=10, context) → 语义搜索
-save_unit(text, metadata={}, context)  → 将 Agent 产出存为 Unit
+save_thought(text, metadata={}, context)  → 将 Agent 产出存为 thought（flat authored Unit）
 ```
 
 **依赖**：任务 3
@@ -208,7 +214,7 @@ Week 3
 | **storage/postgres.py** | 全部重写 | — | — |
 | **API** | 全部端点改路由和数据源 | /units/search, /auth/* | — |
 | **Ingest pipeline** | pipeline.py 输出改为 Unit | — | handler/*, format_utils/*, processing/* |
-| **Agent tools** | 4 个工具改为查新表 | search_units, save_unit | — |
+| **Agent tools** | 4 个工具改为查新表 | search_units, save_thought | — |
 | **前端 types** | Content→Unit, Annotation→Anchor | — | — |
 | **前端 API client** | 端点路径全改 | units/search | — |
 | **前端 Reader** | 数据源路由改 | Unit 写入页 | 渲染逻辑、组件结构 |

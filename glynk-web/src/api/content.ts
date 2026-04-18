@@ -40,10 +40,12 @@ export async function listContents(limit = 20, offset = 0): Promise<{ contents: 
   return res.data;
 }
 
-export async function createUnit(data: { text: string; metadata?: object }): Promise<{ id: string }> {
-  const res = await client.post<{ id: string }>('/units', data);
+export async function createThought(data: { text: string; metadata?: object }): Promise<{ id: string }> {
+  const res = await client.post<{ id: string }>('/thoughts', data);
   return res.data;
 }
+// Alias for older imports; prefer createThought in new code.
+export const createUnit = createThought;
 
 export async function getAuthoredUnits(limit = 20, offset = 0): Promise<{ contents: Content[]; total: number }> {
   const res = await client.get<{ contents: Content[]; total: number }>('/units', { 

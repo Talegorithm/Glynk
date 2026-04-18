@@ -39,11 +39,18 @@ export GLYNK_API_URL="http://ijiaodui.com:32007/"  # 或生产环境地址
 
 ## 核心流程
 
-1. **列表**: `GET /api/contents` — 查看平台上有哪些内容
-2. **阅读**: `GET /api/content/{id}/chunk?size=20000` — 逐页阅读（AI 优化的简化 HTML）
-3. **标注**: `POST /api/annotate` 或 `/api/annotate/batch` — 创建 hook/高亮/笔记
-4. **检索**: `POST /api/query` — 跨所有标注的语义搜索
-5. **大纲**: `PUT /api/content/{id}/outline` — 提交结构化大纲
+Glynk 上所有内容都是 **Unit**，但有两种 publishing 行为：
+
+- **publication**（`shape=structured`）：可阅读、可被 span 级精细标注的作品（书、文章、转写稿、md 上传）。通过 `POST /api/publications` 或 `POST /api/publications/upload` 创建。
+- **thought**（`shape=flat`）：独立的 authored 想法 / 评论 / 反应。通过 `POST /api/thoughts` 创建。
+
+阅读 / 列表 / 搜索 / 挂 anchor 的接口对两者统一。
+
+1. **列表**: `GET /api/units?origin=ingested&limit=50` — 浏览 publications
+2. **阅读**: `GET /api/units/{id}/read?size=20000` — 逐页阅读（publication 按 span 分页；thought 整条返回）
+3. **标注**: `POST /api/anchors` 或 `/api/anchors/batch` — 创建 highlight/hook/note 等
+4. **检索**: `POST /api/units/search` — 跨所有 Unit 的语义搜索
+5. **大纲**: `PUT /api/units/{id}/outline` — 提交结构化大纲
 
 ## 核心概念
 
@@ -102,17 +109,23 @@ Hook 是**逆向提问**：假设这段内容是"答案"，什么问题会把人
 # 获取内容元数据 + 目录 + 大纲
 curl "$GLYNK_API_URL/api/content/{content_id}"
 
-# 从 URL 摄入
-curl -X POST "$GLYNK_API_URL/api/ingest" \
+# 从 URL 发布 publication
+curl -X POST "$GLYNK_API_URL/api/publications" \
   -H "Authorization: Bearer $GLYNK_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"source":"https://example.com/article"}'
 # → {"content_id":"a1b2c3d4","title":"...","source_type":"article","file_count":1,"total_chars":5000}
 
 # 直接上传文件
-curl -X POST "$GLYNK_API_URL/api/ingest/upload" \
+curl -X POST "$GLYNK_API_URL/api/publications/upload" \
   -H "Authorization: Bearer $GLYNK_TOKEN" \
   -F "file=@book.epub"
+
+# 放下一个想法（flat authored Unit）
+curl -X POST "$GLYNK_API_URL/api/thoughts" \
+  -H "Authorization: Bearer $GLYNK_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"今天读了三体，有个想法..."}'
 ```
 
 ### 阅读内容
@@ -260,7 +273,7 @@ curl -X DELETE "$GLYNK_API_URL/api/sources/{id}" ...
 
 ```bash
 # 1. 摄入内容（如果用户提供了文件/URL）
-curl -X POST "$GLYNK_API_URL/api/ingest" \
+curl -X POST "$GLYNK_API_URL/api/publications" \
   -H "Authorization: Bearer $GLYNK_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"source":"https://example.com/article"}'
@@ -311,13 +324,13 @@ curl "$GLYNK_API_URL/api/content/{content_id}/chunk?size=3000&from={span_id}"
 
 ```bash
 # URL
-curl -X POST "$GLYNK_API_URL/api/ingest" \
+curl -X POST "$GLYNK_API_URL/api/publications" \
   -H "Authorization: Bearer $GLYNK_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"source":"用户给的URL"}'
 
 # 本地文件
-curl -X POST "$GLYNK_API_URL/api/ingest/upload" \
+curl -X POST "$GLYNK_API_URL/api/publications/upload" \
   -H "Authorization: Bearer $GLYNK_TOKEN" \
   -F "file=@用户给的文件路径"
 ```

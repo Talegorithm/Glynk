@@ -28,13 +28,15 @@ Glynk 后端已完成 Entity / Unit / Anchor 三表 + Anchor API + 讨论线程�
 **后端提供的 API**：
 
 ```
-POST /units
+POST /thoughts
   Body: { text: string, metadata?: object }
   Response: { id: string }
   Auth: required
 ```
 
 短文本（去标点 emoji 后 < 30 字符）后端会自动跳过 embedding，不影响功能。
+
+（老路径 `POST /units` 是 deprecated alias，新代码请用 `/thoughts` —— 这样能把"放想法"和"发 publication"两种 publishing 动作在 API 上区分清楚。）
 
 ### 2.2 讨论线程
 

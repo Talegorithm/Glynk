@@ -58,22 +58,22 @@ Hook 是**逆向提问**：假设这段内容是"答案"，什么问题会把人
 
 ## 步骤 1：获取内容
 
-如果用户给了 URL 或文件路径，先导入：
+如果用户给了 URL 或文件路径，先发布为 publication：
 
 ```bash
 # URL
-curl -X POST "$GLYNK_API_URL/api/ingest" \
+curl -X POST "$GLYNK_API_URL/api/publications" \
   -H "Authorization: Bearer $GLYNK_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"source":"用户给的URL"}'
 
 # 本地文件（epub/pdf/html/md）
-curl -X POST "$GLYNK_API_URL/api/ingest/upload" \
+curl -X POST "$GLYNK_API_URL/api/publications/upload" \
   -H "Authorization: Bearer $GLYNK_TOKEN" \
   -F "file=@文件路径"
 ```
 
-导入成功后获得 `content_id`，后续操作基于此 ID。
+发布成功后获得 `content_id`（= Unit id），后续操作基于此 ID。
 
 如果用户指定已有内容，先获取详情和目录：
 

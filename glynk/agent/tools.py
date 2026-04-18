@@ -178,13 +178,15 @@ async def search_units(
     )
 
 
-@tool(description="将 Agent 产出存为 Glynk Unit", hidden_params=["context"])
-async def save_unit(
+@tool(description="将 Agent 产出存为 Glynk thought（authored flat Unit）", hidden_params=["context"])
+async def save_thought(
     text: str,
     metadata: str = "{}",
     context: Optional[dict] = None,
 ) -> ToolResult:
-    """存储文本为一个 authored Unit。
+    """把一段文本保存为 thought（= authored flat Unit，"放下一个想法"）。
+
+    想让内容被精细标注 / 供人阅读，请用 publication 相关工具而不是这个。
 
     Args:
         text: 文本内容
@@ -192,10 +194,10 @@ async def save_unit(
     """
     client = _get_client(context)
     meta = json.loads(metadata)
-    r = client.post("/units", json={"text": text, "metadata": meta})
+    r = client.post("/thoughts", json={"text": text, "metadata": meta})
     r.raise_for_status()
     data = r.json()
     return ToolResult(
-        title=f"Unit saved: {data['id']}",
-        output=f"Created unit {data['id']}",
+        title=f"Thought saved: {data['id']}",
+        output=f"Created thought {data['id']}",
     )

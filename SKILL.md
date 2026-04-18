@@ -39,11 +39,18 @@ All endpoints below require `Authorization: Bearer $GLYNK_TOKEN` unless noted.
 
 ## Core Workflow
 
-1. **List**: `GET /api/contents` -- browse available content
-2. **Read**: `GET /api/content/{id}/chunk?size=20000` -- read page by page (AI-optimized simplified HTML)
-3. **Annotate**: `POST /api/annotate` or `/api/annotate/batch` -- create hooks/highlights/notes
-4. **Search**: `POST /api/query` -- semantic search across all annotations
-5. **Outline**: `PUT /api/content/{id}/outline` -- submit structured outline
+Every piece of content on Glynk is a **Unit**, but there are two kinds of publishing:
+
+- **publication** (`shape=structured`): readable, span-annotatable content (books, articles, transcripts, md uploads). Created via `POST /api/publications` or `POST /api/publications/upload`.
+- **thought** (`shape=flat`): a standalone authored utterance (comment, note, reaction). Created via `POST /api/thoughts`.
+
+Read / list / search / annotate APIs all operate on Unit regardless of shape.
+
+1. **List**: `GET /api/units?origin=ingested&limit=50` -- browse publications
+2. **Read**: `GET /api/units/{id}/read?size=20000` -- read page by page (publications paginate by spans; thoughts return single-shot)
+3. **Annotate**: `POST /api/anchors` or `/api/anchors/batch` -- create highlights/hooks/notes/etc.
+4. **Search**: `POST /api/units/search` -- semantic search across all Units
+5. **Outline**: `PUT /api/units/{id}/outline` -- submit structured outline
 
 ## Key Concepts
 
@@ -103,14 +110,14 @@ Bad: "What does Peter Thiel think about secrets?"
 curl "$GLYNK_API_URL/api/content/{content_id}"
 
 # Ingest from URL
-curl -X POST "$GLYNK_API_URL/api/ingest" \
+curl -X POST "$GLYNK_API_URL/api/publications" \
   -H "Authorization: Bearer $GLYNK_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"source":"https://example.com/article"}'
 # -> {"content_id":"a1b2c3d4","title":"...","source_type":"article","file_count":1,"total_chars":5000}
 
 # Upload file directly
-curl -X POST "$GLYNK_API_URL/api/ingest/upload" \
+curl -X POST "$GLYNK_API_URL/api/publications/upload" \
   -H "Authorization: Bearer $GLYNK_TOKEN" \
   -F "file=@book.epub"
 ```
@@ -259,7 +266,7 @@ User specifies a content (or provides a file/URL to ingest first), then read pag
 
 ```bash
 # 1. Ingest content (if user provided a file/URL)
-curl -X POST "$GLYNK_API_URL/api/ingest" \
+curl -X POST "$GLYNK_API_URL/api/publications" \
   -H "Authorization: Bearer $GLYNK_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"source":"https://example.com/article"}'
@@ -310,13 +317,13 @@ curl "$GLYNK_API_URL/api/content/{content_id}/chunk?size=3000&from={span_id}"
 
 ```bash
 # URL
-curl -X POST "$GLYNK_API_URL/api/ingest" \
+curl -X POST "$GLYNK_API_URL/api/publications" \
   -H "Authorization: Bearer $GLYNK_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"source":"the-url-from-user"}'
 
 # Local file
-curl -X POST "$GLYNK_API_URL/api/ingest/upload" \
+curl -X POST "$GLYNK_API_URL/api/publications/upload" \
   -H "Authorization: Bearer $GLYNK_TOKEN" \
   -F "file=@path-to-file"
 ```

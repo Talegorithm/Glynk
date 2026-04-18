@@ -240,9 +240,10 @@ class CreateUnitRequest(BaseModel):
     metadata: dict = {}
 
 
-@router.post("/units", status_code=201)
-async def create_unit(req: CreateUnitRequest, user: dict = Depends(get_current_user)):
-    """创建 authored Unit（放下想法）。文本足够长时自动生成 embedding。"""
+@router.post("/thoughts", status_code=201)
+@router.post("/units", status_code=201, deprecated=True)  # alias
+async def create_thought(req: CreateUnitRequest, user: dict = Depends(get_current_user)):
+    """创建 thought（= 一个 authored flat Unit，"放下一个想法"）。文本足够长时自动生成 embedding。"""
     from glynk.embedding.service import maybe_embed
 
     db = PostgresStore.get_instance()

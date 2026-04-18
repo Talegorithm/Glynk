@@ -91,7 +91,7 @@ def upload(md_path: Path, server: str, token: str) -> dict:
         content_type = 'text/markdown'
         file_data = md_text.encode('utf-8')
 
-    url = f"{server.rstrip('/')}/api/ingest/upload"
+    url = f"{server.rstrip('/')}/api/publications/upload"
     print(f"Uploading {filename} to {url} ...")
 
     body, ct = multipart_encode({}, {"file": (filename, file_data, content_type)})

@@ -62,8 +62,8 @@ uvicorn glynk.main:app --host 0.0.0.0 --port 8000
 ```
 
 ```bash
-# Ingest any document
-curl -X POST http://localhost:8000/ingest \
+# Publish any document (book, article, md, transcript...)
+curl -X POST http://localhost:8000/api/publications \
   -H "Authorization: Bearer <token>" \
   -d '{"source": "path/to/book.epub"}'
 
@@ -82,11 +82,13 @@ curl "http://localhost:8000/content/{id}/read?view=human&lang=zh"    # for human
 
 | Endpoint | Description |
 |---|---|
-| `POST /ingest` | Submit a URL or file. Returns structured content for your agent. |
-| `GET /content/{id}/read` | Read content. `?view=ai` for agents, `?view=human` for readers. `?lang=zh` for translation. |
-| `POST /query` | Search across the library. |
-| `POST /annotate` | Add an annotation (highlight, note, topic, etc). |
-| `GET /annotations` | Your reading history. |
+| `POST /api/publications` | Publish a URL or file as structured, annotatable content. |
+| `POST /api/publications/upload` | Same, but from a local file upload (epub/pdf/html/md/zip). |
+| `POST /api/thoughts` | Drop a thought (flat authored Unit, no span-level annotation). |
+| `GET /api/units/{id}/read` | Read a Unit (paginated for publications). |
+| `POST /api/units/search` | Semantic search across all Units. |
+| `POST /api/anchors` | Create an annotation (highlight, hook, note, summary, reply, like, bookmark, follow). |
+| `GET /api/anchors` | Query annotations. |
 | `POST /sources` | Subscribe to an RSS feed for automatic ingestion. |
 
 Full docs at `/docs` when running.
