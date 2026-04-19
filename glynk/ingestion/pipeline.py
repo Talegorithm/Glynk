@@ -1,7 +1,7 @@
 """
 IngestionPipeline - 摄入流水线
 
-结构化处理：parse -> HTML标准化 -> 保存为 Unit。不跑LLM。
+结构化处理：parse -> HTML标准化 -> 保存为 Unit。不跑LLM（例外：ASR 转写见 ingest_media）。
 """
 import hashlib
 import json
@@ -23,6 +23,11 @@ from glynk.storage.file_store import FileStore
 logger = logging.getLogger(__name__)
 
 
+def media_oss_key(unit_id: str, filename: str) -> str:
+    """OSS 对象键的规范形式。"""
+    return f"ingest_inbox/{unit_id}/{filename}"
+
+
 class ContentAlreadyExistsError(Exception):
     def __init__(self, unit: dict):
         self.unit = unit
@@ -37,6 +42,15 @@ class IngestionPipeline:
         self.config = config
         self.db = db
         self.file_store = file_store
+        self._oss_client = None
+
+    @property
+    def oss_client(self):
+        """Lazy；没配 OSS 时抛错。"""
+        if self._oss_client is None:
+            from glynk.ingestion.oss import OSSClient
+            self._oss_client = OSSClient(self.config.oss)
+        return self._oss_client
 
     @staticmethod
     def _normalize_url(url: str) -> str:
@@ -175,6 +189,104 @@ class IngestionPipeline:
             file_count=len(processed_files),
             total_chars=total_chars,
             toc=toc_list,
+        )
+
+    async def ingest_media(
+        self,
+        unit_id: str,
+        filename: str,
+        media_type: str,
+        title: str,
+        entity_id: str,
+        author: str = "",
+        source_url: str | None = None,
+        file_hash: str | None = None,
+    ) -> IngestResult:
+        """
+        转写已上传到 OSS 的媒体文件，生成带时间戳的 HTML，落地为 Unit。
+
+        前置：agent 通过 /ingest/media/init 拿到 presigned PUT URL，
+        把文件上传到 oss://{bucket}/{media_oss_key(unit_id, filename)}。
+        """
+        from glynk.ingestion.asr import transcribe
+        from glynk.ingestion.media_html import build_media_html
+
+        if media_type not in ("audio", "video"):
+            raise ValueError(f"media_type must be audio|video, got {media_type!r}")
+
+        existing = self.db.get_unit(unit_id)
+        if existing:
+            raise ContentAlreadyExistsError(existing)
+
+        key = media_oss_key(unit_id, filename)
+        if not self.oss_client.exists(key):
+            raise RuntimeError(
+                f"OSS object {key!r} not found; agent must PUT media first"
+            )
+
+        signed_url = self.oss_client.presigned_get(key, expires_seconds=3 * 3600)
+        logger.info(f"ASR start: unit={unit_id} file={filename}")
+        result = transcribe(signed_url, self.config.asr)
+        logger.info(f"ASR done: {len(result.sentences)} sentences, "
+                    f"{result.duration_ms}ms audio")
+
+        html = build_media_html(
+            unit_id=unit_id,
+            title=title,
+            media_filename=filename,
+            media_type=media_type,
+            transcription=result,
+        )
+
+        media_bytes = self.oss_client.download_bytes(key)
+        self.file_store.write_bytes(unit_id, filename, media_bytes)
+        self.file_store.write_html(unit_id, "0.html", html)
+        self.file_store.write_bytes(
+            unit_id,
+            "asr_raw.json",
+            json.dumps(result.raw, ensure_ascii=False).encode("utf-8"),
+        )
+
+        try:
+            self.oss_client.delete(key)
+        except Exception as e:
+            logger.warning(f"OSS cleanup failed for {key}: {e}")
+
+        author_entity_id = self._get_or_create_author_entity(author or "Unknown")
+        total_chars = sum(len(s.text) for s in result.sentences)
+
+        self.db.create_unit(
+            unit_id=unit_id,
+            author_id=author_entity_id,
+            origin="ingested",
+            shape="structured",
+            body={"toc": [], "file_count": 1},
+            metadata={
+                "title": title,
+                "source_type": media_type,
+                "source_url": source_url,
+                "source_file_hash": file_hash,
+                "total_chars": total_chars,
+                "imported_by": entity_id,
+                "status": "ready",
+                "media": {
+                    "type": media_type,
+                    "filename": filename,
+                    "duration_ms": result.duration_ms,
+                    "asr_model": self.config.asr.model,
+                },
+            },
+        )
+
+        return IngestResult(
+            unit_id=unit_id,
+            title=title,
+            author=author,
+            author_entity_id=author_entity_id,
+            source_type=media_type,
+            file_count=1,
+            total_chars=total_chars,
+            toc=[],
         )
 
     async def _resolve_source(self, source: Union[str, Path]) -> Path:

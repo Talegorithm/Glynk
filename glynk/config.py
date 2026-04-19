@@ -53,10 +53,33 @@ class TranslationConfig:
 
 
 @dataclass
+class OSSConfig:
+    """Aliyun OSS ——（见 docs/modules/video-ingestion.md）媒体摄入 inbox。"""
+    endpoint: str = "https://oss-cn-beijing.aliyuncs.com"
+    bucket: str = "qwen-transcribe"
+    access_key_id: str = ""
+    access_key_secret: str = ""
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.endpoint and self.bucket and self.access_key_id and self.access_key_secret)
+
+
+@dataclass
+class ASRConfig:
+    """DashScope Qwen3-ASR。api_key 来自 DashScope 控制台（sk-... 格式）。"""
+    api_key: str = ""
+    model: str = "qwen3-asr-flash-filetrans"
+    language_hints: list = field(default_factory=lambda: ["zh", "en"])
+
+
+@dataclass
 class AppConfig:
     storage: StorageConfig = field(default_factory=StorageConfig)
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
     translation: TranslationConfig = field(default_factory=TranslationConfig)
+    oss: OSSConfig = field(default_factory=OSSConfig)
+    asr: ASRConfig = field(default_factory=ASRConfig)
     rss_check_interval_hours: int = 24
     remote_file_base: str = ""  # 非空时用 RemoteFileStore 从远程读文件（本地开发用）
 
@@ -91,10 +114,24 @@ class AppConfig:
             enabled=os.getenv("TRANSLATION_ENABLED", "true").lower() == "true",
         )
 
+        # Aliyun 相关的 key 统一 ALI_ 前缀；OSS 的 endpoint / bucket 有默认值。
+        oss = OSSConfig(
+            endpoint=os.getenv("ALI_OSS_ENDPOINT", "https://oss-cn-beijing.aliyuncs.com"),
+            bucket=os.getenv("ALI_OSS_BUCKET", "qwen-transcribe"),
+            access_key_id=os.getenv("ALI_ACCESS_KEY_ID", ""),
+            access_key_secret=os.getenv("ALI_ACCESS_KEY_SECRET", ""),
+        )
+
+        asr = ASRConfig(
+            api_key=os.getenv("ALI_API_KEY", ""),
+        )
+
         return cls(
             storage=storage,
             embedding=embedding,
             translation=translation,
+            oss=oss,
+            asr=asr,
             rss_check_interval_hours=int(os.getenv("RSS_CHECK_INTERVAL_HOURS", "24")),
             remote_file_base=os.getenv("REMOTE_FILE_BASE", ""),
         )

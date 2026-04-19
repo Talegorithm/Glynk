@@ -112,11 +112,10 @@ Python: `oss2`, `dashscope`（新增到 requirements.txt）。系统：无（ffm
 
 环境变量：
 ```
-OSS_ENDPOINT=https://oss-cn-beijing.aliyuncs.com
-OSS_BUCKET=qwen-transcribe
-OSS_ACCESS_KEY_ID=...
-OSS_ACCESS_KEY_SECRET=...
-DASHSCOPE_API_KEY=...
+ALI_ACCESS_KEY_ID=...          # Aliyun Access Key ID (LTAI...)，给 OSS 签名用
+ALI_ACCESS_KEY_SECRET=...      # Aliyun Access Key Secret
+ALI_API_KEY=sk-...             # DashScope API key，给 Qwen3-ASR 用
+# ALI_OSS_ENDPOINT / ALI_OSS_BUCKET 有代码内默认，改覆盖再填
 ```
 
 ## 非目标（后续再议）
