@@ -238,6 +238,7 @@ class HTMLProcessor:
                     changed = True
 
     def _process_images(self, soup: BeautifulSoup, epub_images: Dict[str, bytes]) -> None:
+        missing: list[str] = []
         for img in soup.find_all('img'):
             original_src = img.get('src', '')
             if not original_src:
@@ -264,8 +265,21 @@ class HTMLProcessor:
 
             if image_data:
                 self.images[filename] = image_data
+            else:
+                # img src 被改写成 /media/... 但数据没落地，前端会图裂。
+                # 常见原因：上传时没打包图片 (raw md 直传) 或 md 引用路径找不到本地图片。
+                missing.append(original_src)
 
             img['src'] = f"/media/{self.content_id}/{filename}"
+
+        if missing:
+            preview = ", ".join(missing[:3])
+            more = f" (+{len(missing) - 3} more)" if len(missing) > 3 else ""
+            logger.warning(
+                f"[{self.content_id}-{self.file_idx}] {len(missing)} image(s) "
+                f"referenced but not bundled: {preview}{more}. "
+                f"HTML still rewrites src to /media/... so these will 404 at read."
+            )
 
     def _rewrite_toc_links(self, soup: BeautifulSoup) -> None:
         for a in soup.find_all('a'):

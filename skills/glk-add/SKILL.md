@@ -1,7 +1,7 @@
 ---
 name: glk-add
 description: 将内容发布到 Glynk 平台（作为 publication，可阅读 + 可被精细标注）。支持 URL、本地文件（epub/pdf/html/md）、带图片的 Markdown、RSS 订阅、音视频（自动转写并对齐时间戳）。
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
 # Glynk 发布
@@ -117,6 +117,36 @@ curl -X DELETE "$GLYNK_API_URL/api/sources/{id}" \
 ```
 
 发布成功后，如果需要阅读该内容，可以参照 ``glk-read`` skill。
+
+## 删除（发布出问题时恢复用）
+
+如果发布出了问题（比如图片没一起打包进 zip、md 解析出预期外的结果），**先删掉重传**，不要想着"修"—— unit_id 是内容 hash，同一份 md 重传会被 dedup，删干净再传才会走完整摄入。
+
+```bash
+curl -X DELETE "$GLYNK_API_URL/api/publications/{unit_id}" \
+  -H "Authorization: Bearer $GLYNK_TOKEN"
+# → {"ok": true, "deleted": "<unit_id>"}
+```
+
+限制：
+- **只能删自己导入的**（`metadata.imported_by == 当前 entity_id`，否则 403）
+- 只能删 publication（thought 不在本端点范围，403/400）
+- 删除会级联清掉：reading_progress/sessions、event_log 里的相关记录、所有标注这个 publication 的 authored Unit（别人的 highlight / hook / note 也一并消失）、file store 里的 HTML + 图片目录
+
+典型恢复流程：
+
+```bash
+# 1. 传了，发现图片没跟上（reader 里图裂）
+python upload_md.py post.md
+# → unit_id=abc...
+
+# 2. 检查问题（看看图片是不是没打包）
+# upload_md.py 会打印 "N image(s) uploaded"；为 0 就是漏了
+
+# 3. 删掉，修 md 里的图片引用路径后重传
+curl -X DELETE "$GLYNK_API_URL/api/publications/abc..." -H "Authorization: Bearer $GLYNK_TOKEN"
+python upload_md.py post.md
+```
 
 ---
 

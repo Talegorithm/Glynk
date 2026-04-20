@@ -314,8 +314,44 @@ class PostgresStore:
             self.pool.putconn(conn)
 
     def delete_unit(self, unit_id: str) -> bool:
-        self._execute("DELETE FROM units WHERE id = %s", (unit_id,))
-        return True
+        """
+        事务级联删除一个 Unit 及其所有依赖。
+
+        schema 里只有 anchors.source_unit 是 ON DELETE CASCADE；
+        别的外键（anchors.target_unit, reading_progress/sessions, event_log.subject_unit）
+        会阻断 DELETE，所以要手动清理：
+
+        1. 清 reading state（progress / sessions）
+        2. 清 event_log 里指向它的记录
+        3. 删所有"标注这个 Unit"的 authored source Unit（从而级联删这些 anchor）
+        4. 删剩下仅剩 source=entity 的 anchor（like / bookmark 等，没 source_unit）
+        5. 删 Unit 本体（级联它作为 source_unit 的 anchors）
+
+        注意 step 3：标注（别人写的 note / highlight / hook）会随之消失 —— 它们
+        离开 target 就失去语义。早期产品阶段接受这个行为，以后可考虑"悬空标记"保留。
+        """
+        conn = self.pool.getconn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM reading_sessions WHERE unit_id = %s", (unit_id,))
+                cur.execute("DELETE FROM reading_progress WHERE unit_id = %s", (unit_id,))
+                cur.execute("DELETE FROM event_log WHERE subject_unit = %s", (unit_id,))
+                cur.execute(
+                    """DELETE FROM units WHERE id IN (
+                           SELECT source_unit FROM anchors
+                           WHERE target_unit = %s AND source_unit IS NOT NULL
+                       )""",
+                    (unit_id,),
+                )
+                cur.execute("DELETE FROM anchors WHERE target_unit = %s", (unit_id,))
+                cur.execute("DELETE FROM units WHERE id = %s", (unit_id,))
+            conn.commit()
+            return True
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            self.pool.putconn(conn)
 
     def get_unit(self, unit_id: str) -> Optional[dict]:
         return self._execute(

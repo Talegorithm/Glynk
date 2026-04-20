@@ -1,10 +1,11 @@
 """
 Publication API —— "发布一份可阅读 / 可被精细标注的内容"
 
-  POST /publications                导入（URL 或路径）
-  POST /publications/upload         上传文件导入
-  POST /publications/media/init     媒体摄入：签发 OSS 上传 URL
-  POST /publications/media/finalize 媒体摄入：转写并落地
+  POST   /publications                导入（URL 或路径）
+  POST   /publications/upload         上传文件导入
+  POST   /publications/media/init     媒体摄入：签发 OSS 上传 URL
+  POST   /publications/media/finalize 媒体摄入：转写并落地
+  DELETE /publications/{unit_id}      删除一个 publication（仅导入者可删）
 """
 import re
 import tempfile
@@ -175,6 +176,41 @@ async def create_publication_media_finalize(
         }
     except Exception as e:
         raise HTTPException(500, f"Media ingestion failed: {e}")
+
+
+@router.delete("/publications/{unit_id}")
+async def delete_publication(unit_id: str, user: dict = Depends(get_current_user)):
+    """
+    删除一个 publication —— 清掉 DB 里的 Unit + 级联的标注/阅读记录，
+    以及 file_store 里对应的 HTML / 图片目录。
+
+    权限：仅原导入者（`metadata.imported_by == 当前 entity_id`）能删。
+    这是给上传出问题（图片没打包进来、md 解析异常等）时的恢复口子。
+    """
+    if _pipeline is None:
+        raise HTTPException(500, "Pipeline not initialized")
+
+    unit = _pipeline.db.get_unit(unit_id)
+    if not unit:
+        raise HTTPException(404, "Unit not found")
+
+    if unit.get("origin") != "ingested":
+        raise HTTPException(
+            400,
+            f"Not a publication (origin={unit.get('origin')}). "
+            f"thoughts can't be deleted via this endpoint.",
+        )
+
+    imported_by = (unit.get("metadata") or {}).get("imported_by")
+    if imported_by != user["entity_id"]:
+        raise HTTPException(
+            403,
+            "Only the importer can delete this publication",
+        )
+
+    _pipeline.db.delete_unit(unit_id)
+    _pipeline.file_store.delete_unit_dir(unit_id)
+    return {"ok": True, "deleted": unit_id}
 
 
 @router.post("/publications/upload")

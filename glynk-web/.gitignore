@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Synced from repo-root/skills at build time (scripts/sync-skills.sh)
+public/skills/
+public/install.sh
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

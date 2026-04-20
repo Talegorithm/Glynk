@@ -27,12 +27,59 @@ from urllib.error import HTTPError
 
 
 def find_local_images(md_text: str) -> list[str]:
-    refs = []
-    for match in re.finditer(r'!\[.*?\]\(([^)]+)\)', md_text):
-        path = match.group(1).split(' ')[0]
-        if not path.startswith(('http://', 'https://', '/')):
+    """Return ordered, deduplicated list of local image refs from markdown + HTML img tags."""
+    from urllib.parse import unquote
+    refs: list[str] = []
+    seen: set[str] = set()
+
+    def _add(raw: str) -> None:
+        # strip optional title: path "title" or path 'title'
+        path = re.split(r'\s+["\']', raw, maxsplit=1)[0].strip().strip('<>')
+        path = unquote(path)
+        if not path or path.startswith(('http://', 'https://', 'data:', '/')):
+            return
+        if path not in seen:
+            seen.add(path)
             refs.append(path)
+
+    # Markdown: ![alt](path) and ![alt](path "title")
+    for m in re.finditer(r'!\[[^\]]*\]\(([^)]+)\)', md_text):
+        _add(m.group(1))
+    # HTML: <img src="path"> or <img src='path'>
+    for m in re.finditer(r'<img\b[^>]*?\bsrc\s*=\s*["\']([^"\']+)["\']', md_text, re.IGNORECASE):
+        _add(m.group(1))
     return refs
+
+
+def plan_flat_arcnames(refs: list[str]) -> dict[str, str]:
+    """Map each original ref → a zip-safe arcname under images/, handling basename collisions."""
+    mapping: dict[str, str] = {}
+    used: set[str] = set()
+    for ref in refs:
+        base = Path(ref).name
+        candidate = f"images/{base}"
+        if candidate in used:
+            stem, suffix = Path(base).stem, Path(base).suffix
+            i = 1
+            while f"images/{stem}_{i}{suffix}" in used:
+                i += 1
+            candidate = f"images/{stem}_{i}{suffix}"
+        used.add(candidate)
+        mapping[ref] = candidate
+    return mapping
+
+
+def rewrite_md_refs(md_text: str, mapping: dict[str, str]) -> str:
+    """Replace each original ref in md/html with its flat arcname. Longest-first to avoid partial overlaps."""
+    from urllib.parse import quote
+    # Replace both raw and URL-encoded forms of each ref
+    for ref in sorted(mapping.keys(), key=len, reverse=True):
+        new = mapping[ref]
+        md_text = md_text.replace(ref, new)
+        encoded = quote(ref, safe='/')
+        if encoded != ref:
+            md_text = md_text.replace(encoded, new)
+    return md_text
 
 
 def multipart_encode(fields: dict, files: dict) -> tuple[bytes, str]:
@@ -77,11 +124,16 @@ def upload(md_path: Path, server: str, token: str) -> dict:
             print(f"  - {m}")
 
     if local_images:
+        # Flatten to images/<basename> inside zip — avoids `..` path-traversal rejection
+        # by server extractors and keeps md refs in sync with extracted layout.
+        arcname_map = plan_flat_arcnames([r for r in image_refs if r in local_images])
+        rewritten_md = rewrite_md_refs(md_text, arcname_map)
+
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
-            zf.write(md_path, md_path.name)
-            for ref, img_path in local_images.items():
-                zf.write(img_path, ref)
+            zf.writestr(md_path.name, rewritten_md)
+            for ref, arcname in arcname_map.items():
+                zf.write(local_images[ref], arcname)
         buf.seek(0)
         filename = md_path.with_suffix('.zip').name
         content_type = 'application/zip'

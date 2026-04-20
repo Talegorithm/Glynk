@@ -5,7 +5,10 @@
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "scripts": {
+    "sync-skills": "bash scripts/sync-skills.sh",
+    "predev": "npm run sync-skills",
     "dev": "vite",
+    "prebuild": "npm run sync-skills",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
