@@ -65,6 +65,16 @@ async def update_session_note(session_id: str, req: SessionNoteUpdate, user: dic
         raise HTTPException(404, "Session not found")
     return session
 
+from pydantic import BaseModel
+class PastSessionRequest(BaseModel):
+    tag_id: str
+    duration_mins: int
+    note: str
+
+@router.post("/timetrack/sessions/past", response_model=SessionResponse)
+async def add_past_session(req: PastSessionRequest, user: dict = Depends(get_current_user), store: TimetrackStore = Depends(get_store)):
+    return store.add_past_session(user['entity_id'], req.tag_id, req.duration_mins, req.note)
+
 @router.get("/timetrack/stats")
 async def get_stats(
     start_dt: str = Query(None), 

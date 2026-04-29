@@ -33,7 +33,7 @@ export default function TimetrackIndex() {
   const {
     tags, activeSessions, todayStats, singleMode, loading,
     fetchTags, fetchActiveSessions, fetchTodayStats, setSingleMode,
-    createTag, deleteTag, reorderTags, startSession, stopSession, updateSessionNote
+    createTag, deleteTag, reorderTags, startSession, stopSession, updateSessionNote, addPastSession
   } = useTimetrackStore();
 
   const [isAdding, setIsAdding] = useState(false);
@@ -41,7 +41,7 @@ export default function TimetrackIndex() {
   const [newTagColor, setNewTagColor] = useState(COLORS[0]);
   
   const [now, setNow] = useState(Date.now());
-  const [noteModal, setNoteModal] = useState<{ sessionId: string, note: string } | null>(null);
+  const [modal, setModal] = useState<{ tagId: string, sessionId?: string, durationMins: number | '', note: string } | null>(null);
   const [isEditing, setIsEditing] = useState(false);
 
   // Drag and drop state
@@ -90,15 +90,29 @@ export default function TimetrackIndex() {
   // Long press handling
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const isLongPressRef = useRef(false);
+  const isCanceledRef = useRef(false);
 
   const handlePointerDown = (tagId: string, sessionId?: string, currentNote: string = '') => {
     isLongPressRef.current = false;
+    isCanceledRef.current = false;
     timerRef.current = setTimeout(() => {
+      if (isCanceledRef.current) return;
       isLongPressRef.current = true;
-      if (sessionId) {
-        setNoteModal({ sessionId, note: currentNote });
-      }
+      setModal({
+        tagId,
+        sessionId,
+        note: currentNote || '',
+        durationMins: ''
+      });
     }, 600); // 600ms long press
+  };
+
+  const cancelPointer = () => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    isCanceledRef.current = true;
   };
 
   const handlePointerUp = (tagId: string, sessionId?: string) => {
@@ -108,10 +122,12 @@ export default function TimetrackIndex() {
       timerRef.current = null;
     }
     
-    if (isLongPressRef.current) {
-      // It was a long press, so we don't toggle the timer.
-      // Reset it for the next interaction
-      setTimeout(() => { isLongPressRef.current = false; }, 100);
+    if (isLongPressRef.current || isCanceledRef.current) {
+      // It was a long press or canceled, so we don't toggle the timer.
+      setTimeout(() => { 
+        isLongPressRef.current = false; 
+        isCanceledRef.current = false;
+      }, 100);
       return;
     }
     
@@ -123,11 +139,21 @@ export default function TimetrackIndex() {
     }
   };
 
-  const handleSaveNote = async () => {
-    if (noteModal) {
-      await updateSessionNote(noteModal.sessionId, noteModal.note);
-      setNoteModal(null);
+  const handleSaveModal = async () => {
+    if (!modal) return;
+    
+    const hasDuration = typeof modal.durationMins === 'number' && modal.durationMins > 0;
+    const hasSession = !!modal.sessionId;
+
+    if (hasDuration) {
+      await addPastSession(modal.tagId, modal.durationMins as number, modal.note);
     }
+    
+    if (hasSession) {
+      await updateSessionNote(modal.sessionId, modal.note);
+    }
+
+    setModal(null);
   };
 
   return (
@@ -194,12 +220,8 @@ export default function TimetrackIndex() {
               onDragEnd={onDragEnd}
               onPointerDown={() => !isEditing && handlePointerDown(tag.id, session?.id, session?.note)}
               onPointerUp={() => handlePointerUp(tag.id, session?.id)}
-              onPointerCancel={() => {
-                if (timerRef.current) clearTimeout(timerRef.current);
-              }}
-              onPointerLeave={() => {
-                if (timerRef.current) clearTimeout(timerRef.current);
-              }}
+              onPointerCancel={cancelPointer}
+              onPointerLeave={cancelPointer}
               onContextMenu={(e) => {
                 if (!isEditing) e.preventDefault(); // Prevent mobile context menu on long press
               }}
@@ -308,27 +330,44 @@ export default function TimetrackIndex() {
         )}
       </div>
 
-      {noteModal && (
+      {modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-sm shadow-xl animate-in zoom-in-95 duration-200">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Add Remark</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+              Add Record
+            </h3>
+            
+            <div className="mb-4">
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Duration (minutes) - Optional if Active</label>
+              <input
+                type="number"
+                value={modal.durationMins}
+                onChange={e => setModal({ ...modal, durationMins: e.target.value ? parseInt(e.target.value) : '' })}
+                placeholder="e.g. 30"
+                className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Remark</label>
             <textarea
-              value={noteModal.note}
-              onChange={e => setNoteModal({ ...noteModal, note: e.target.value })}
-              className="w-full h-24 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none mb-4"
+              value={modal.note}
+              onChange={e => setModal({ ...modal, note: e.target.value })}
               placeholder="What are you working on?"
+              className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none min-h-[100px]"
               autoFocus
             />
-            <div className="flex justify-end gap-3">
+            
+            <div className="flex justify-end gap-2 mt-4">
               <button
-                onClick={() => setNoteModal(null)}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                onClick={() => setModal(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
               >
                 Cancel
               </button>
               <button
-                onClick={handleSaveNote}
-                className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                onClick={handleSaveModal}
+                disabled={!modal.sessionId && (!modal.durationMins || modal.durationMins <= 0)}
+                className="px-4 py-2 text-sm font-medium bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors"
               >
                 Save
               </button>

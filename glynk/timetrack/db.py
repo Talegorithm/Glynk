@@ -143,6 +143,15 @@ class TimetrackStore:
             )
         return self.get_session(session_id)
 
+    def add_past_session(self, entity_id: str, tag_id: str, duration_mins: int, note: str) -> dict:
+        session_id = uuid.uuid4().hex[:16]
+        self.db._execute(
+            """INSERT INTO tt_sessions (id, entity_id, tag_id, start_time, end_time, note) 
+               VALUES (%s, %s, %s, NOW() - INTERVAL '%s minutes', NOW(), %s)""",
+            (session_id, entity_id, tag_id, duration_mins, note)
+        )
+        return self.get_session(session_id)
+
     def update_session_note(self, session_id: str, entity_id: str, note: str) -> Optional[dict]:
         self.db._execute(
             "UPDATE tt_sessions SET note = %s WHERE id = %s AND entity_id = %s",

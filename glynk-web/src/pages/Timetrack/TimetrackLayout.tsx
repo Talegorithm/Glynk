@@ -31,6 +31,16 @@ export default function TimetrackLayout() {
               Timers
             </Link>
             <Link
+              to="/timetrack/logs"
+              className={`text-sm font-medium transition-colors ${
+                location.pathname === '/timetrack/logs' 
+                  ? 'text-blue-600 dark:text-blue-400' 
+                  : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
+              }`}
+            >
+              Logs
+            </Link>
+            <Link
               to="/timetrack/stats"
               className={`text-sm font-medium transition-colors ${
                 location.pathname === '/timetrack/stats' 
@@ -43,7 +53,7 @@ export default function TimetrackLayout() {
           </div>
         </div>
       </nav>
-      <main className="flex-1 relative z-0">
+      <main className="flex-1 relative z-0 overflow-y-auto h-full pb-20">
         <Outlet />
       </main>
     </div>

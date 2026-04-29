@@ -11,6 +11,7 @@ import ReaderPage from './pages/ReaderPage';
 import NotesPage from './pages/NotesPage';
 import TimetrackIndex from './pages/Timetrack/index';
 import TimetrackStats from './pages/Timetrack/Stats';
+import TimetrackLogs from './pages/Timetrack/Logs';
 import TimetrackLayout from './pages/Timetrack/TimetrackLayout';
 import { TimeGradientBg } from './components/background/TimeGradientBg';
 import { useThemeStore } from './store/theme';
@@ -38,6 +39,7 @@ export default function App() {
           <Route element={<TimetrackLayout />}>
             <Route path="/timetrack" element={<TimetrackIndex />} />
             <Route path="/timetrack/stats" element={<TimetrackStats />} />
+            <Route path="/timetrack/logs" element={<TimetrackLogs />} />
           </Route>
         </Route>
 

@@ -18,6 +18,7 @@ interface TimetrackState {
   
   fetchActiveSessions: () => Promise<void>;
   fetchTodayStats: () => Promise<void>;
+  addPastSession: (tagId: string, durationMins: number, note: string) => Promise<void>;
   startSession: (tagId: string) => Promise<Session>;
   stopSession: (sessionId: string) => Promise<void>;
   updateSessionNote: (sessionId: string, note: string) => Promise<void>;
@@ -76,6 +77,11 @@ export const useTimetrackStore = create<TimetrackState>((set, get) => ({
   fetchTodayStats: async () => {
     const stats = await timetrackApi.getTodayStats();
     set({ todayStats: stats });
+  },
+
+  addPastSession: async (tagId, durationMins, note) => {
+    await timetrackApi.addPastSession(tagId, durationMins, note);
+    get().fetchTodayStats();
   },
 
   startSession: async (tagId) => {
