@@ -1,10 +1,10 @@
 import { useEffect, useState, useRef } from 'react';
 import { useTimetrackStore } from '../../store/timetrack';
-import type { Tag } from '../../api/timetrack';
 
 const COLORS = [
   '#EF4444', '#F97316', '#F59E0B', '#10B981', '#3B82F6', '#6366F1', '#8B5CF6', '#EC4899', '#6B7280'
 ];
+const DEFAULT_COLOR = COLORS[0]!;
 
 function formatDuration(ms: number) {
   const totalSeconds = Math.floor(ms / 1000);
@@ -31,14 +31,14 @@ function formatHoursOrMins(ms: number) {
 
 export default function TimetrackIndex() {
   const {
-    tags, activeSessions, todayStats, singleMode, loading,
+    tags, activeSessions, todayStats, singleMode,
     fetchTags, fetchActiveSessions, fetchTodayStats, setSingleMode,
     createTag, deleteTag, reorderTags, startSession, stopSession, updateSessionNote, addPastSession
   } = useTimetrackStore();
 
   const [isAdding, setIsAdding] = useState(false);
   const [newTagName, setNewTagName] = useState('');
-  const [newTagColor, setNewTagColor] = useState(COLORS[0]);
+  const [newTagColor, setNewTagColor] = useState(DEFAULT_COLOR);
   
   const [now, setNow] = useState(Date.now());
   const [modal, setModal] = useState<{ tagId: string, sessionId?: string, durationMins: number | '', note: string } | null>(null);
@@ -76,6 +76,7 @@ export default function TimetrackIndex() {
 
     const newTags = [...tags];
     const draggedTag = newTags[draggedIdx];
+    if (!draggedTag) return;
     newTags.splice(draggedIdx, 1);
     newTags.splice(idx, 0, draggedTag);
     
@@ -88,11 +89,11 @@ export default function TimetrackIndex() {
   };
 
   // Long press handling
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isLongPressRef = useRef(false);
   const isCanceledRef = useRef(false);
 
-  const handlePointerDown = (tagId: string, sessionId?: string, currentNote: string = '') => {
+  const handlePointerDown = (tagId: string, sessionId?: string, currentNote: string | null = '') => {
     isLongPressRef.current = false;
     isCanceledRef.current = false;
     timerRef.current = setTimeout(() => {
@@ -143,13 +144,12 @@ export default function TimetrackIndex() {
     if (!modal) return;
     
     const hasDuration = typeof modal.durationMins === 'number' && modal.durationMins > 0;
-    const hasSession = !!modal.sessionId;
 
     if (hasDuration) {
       await addPastSession(modal.tagId, modal.durationMins as number, modal.note);
     }
     
-    if (hasSession) {
+    if (modal.sessionId) {
       await updateSessionNote(modal.sessionId, modal.note);
     }
 

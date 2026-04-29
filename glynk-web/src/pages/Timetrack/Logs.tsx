@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import type { StatItem, Tag } from '../../api/timetrack';
+import type { StatItem } from '../../api/timetrack';
 import { timetrackApi } from '../../api/timetrack';
 import { useTimetrackStore } from '../../store/timetrack';
 
@@ -19,11 +19,6 @@ function formatDuration(ms: number) {
 function formatTime(dateStr: string) {
   const d = new Date(dateStr);
   return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-}
-
-function formatDateDisplay(dateStr: string) {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 export default function TimetrackLogs() {

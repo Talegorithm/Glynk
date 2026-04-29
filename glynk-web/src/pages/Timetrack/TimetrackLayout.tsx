@@ -1,5 +1,4 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { useAuthStore } from '../../store/auth';
 
 export default function TimetrackLayout() {
   const location = useLocation();

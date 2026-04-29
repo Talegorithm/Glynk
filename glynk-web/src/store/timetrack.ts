@@ -85,7 +85,7 @@ export const useTimetrackStore = create<TimetrackState>((set, get) => ({
   },
 
   startSession: async (tagId) => {
-    const { singleMode, activeSessions } = get();
+    const { singleMode } = get();
     // Optimistic UI could be added here, but relying on server ensures accurate timestamp
     const session = await timetrackApi.startSession(tagId, singleMode);
     
