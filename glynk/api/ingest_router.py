@@ -10,7 +10,7 @@ Publication API —— "发布一份可阅读 / 可被精细标注的内容"
 import re
 import tempfile
 from pathlib import Path
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Query
 from pydantic import BaseModel
 from typing import Optional
 
@@ -19,6 +19,7 @@ from glynk.ingestion.pipeline import (
     IngestionPipeline,
     ContentAlreadyExistsError,
     media_oss_key,
+    _new_unit_id,
 )
 
 router = APIRouter(tags=["publications"])
@@ -40,7 +41,9 @@ class PublicationRequest(BaseModel):
 
 @router.post("/publications")
 async def create_publication_from_url(
-    req: PublicationRequest, user: dict = Depends(get_current_user)
+    req: PublicationRequest,
+    update_of: str | None = Query(None, description="指定要更新的 Unit ID；不传则创建新 Unit"),
+    user: dict = Depends(get_current_user),
 ):
     if _pipeline is None:
         raise HTTPException(500, "Pipeline not initialized")
@@ -49,6 +52,7 @@ async def create_publication_from_url(
         result = await _pipeline.ingest(
             source=req.source,
             entity_id=user["entity_id"],
+            update_of=update_of,
         )
         return {
             "content_id": result.unit_id,
@@ -72,6 +76,8 @@ async def create_publication_from_url(
             "toc": [],
             "existing": True,
         }
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     except Exception as e:
         raise HTTPException(500, f"Ingestion failed: {e}")
 
@@ -121,10 +127,13 @@ async def create_publication_media_init(
     if not _pipeline.config.oss.enabled:
         raise HTTPException(503, "OSS not configured on server")
 
-    unit_id = req.file_hash.lower()[:16]
-    if _pipeline.db.get_unit(unit_id):
-        return MediaInitResponse(unit_id=unit_id, upload_url=None, existing=True)
+    # 内容去重：同 hash 已有 Unit 直接返回
+    existing = _pipeline.db.get_unit_by_content_hash(req.file_hash.lower())
+    if existing:
+        return MediaInitResponse(unit_id=existing["id"], upload_url=None, existing=True)
 
+    # 服务端分配新 unit_id（随机），OSS key 走这个 id
+    unit_id = _new_unit_id()
     key = media_oss_key(unit_id, req.filename)
     upload_url = _pipeline.oss_client.presigned_put(key, expires_seconds=1800)
     return MediaInitResponse(unit_id=unit_id, upload_url=upload_url, existing=False)
@@ -138,8 +147,25 @@ async def create_publication_media_finalize(
         raise HTTPException(500, "Pipeline not initialized")
     _validate_media_request(req.filename, req.file_hash, req.media_type)
 
-    if req.unit_id != req.file_hash.lower()[:16]:
-        raise HTTPException(400, "unit_id must equal file_hash[:16]")
+    # 二次去重：同内容已存在则直接返回（把已上传的 OSS 对象清理掉）
+    existing = _pipeline.db.get_unit_by_content_hash(req.file_hash.lower())
+    if existing and existing["id"] != req.unit_id:
+        try:
+            _pipeline.oss_client.delete(media_oss_key(req.unit_id, req.filename))
+        except Exception:
+            pass
+        meta = existing.get("metadata") or {}
+        body = existing.get("body") or {}
+        return {
+            "content_id": existing["id"],
+            "title": meta.get("title", ""),
+            "author": "",
+            "source_type": meta.get("source_type", ""),
+            "file_count": body.get("file_count", 0),
+            "total_chars": meta.get("total_chars", 0),
+            "toc": [],
+            "existing": True,
+        }
 
     try:
         result = await _pipeline.ingest_media(
@@ -150,7 +176,7 @@ async def create_publication_media_finalize(
             entity_id=user["entity_id"],
             author=req.author or "",
             source_url=req.source_url,
-            file_hash=req.file_hash.lower(),
+            content_hash=req.file_hash.lower(),
         )
         return {
             "content_id": result.unit_id,
@@ -216,6 +242,7 @@ async def delete_publication(unit_id: str, user: dict = Depends(get_current_user
 @router.post("/publications/upload")
 async def create_publication_from_upload(
     file: UploadFile = File(...),
+    update_of: str | None = Query(None, description="指定要更新的 Unit ID；不传则创建新 Unit"),
     user: dict = Depends(get_current_user),
 ):
     if _pipeline is None:
@@ -231,6 +258,7 @@ async def create_publication_from_upload(
         result = await _pipeline.ingest(
             source=Path(tmp.name),
             entity_id=user["entity_id"],
+            update_of=update_of,
         )
         return {
             "content_id": result.unit_id,
@@ -254,5 +282,7 @@ async def create_publication_from_upload(
             "toc": [],
             "existing": True,
         }
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     except Exception as e:
         raise HTTPException(500, f"Ingestion failed: {e}")

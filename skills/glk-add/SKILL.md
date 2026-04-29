@@ -8,7 +8,7 @@ disable-model-invocation: false
 
 把内容发布为 **publication**（可阅读 / 可被精细标注的 Unit）。想放下一个想法而不是发布作品，用 `/api/thoughts` 而不是这里。
 
-前置：需要环境变量 `GLYNK_TOKEN` 和 `GLYNK_API_URL`。所有接口均需 `Authorization: Bearer $GLYNK_TOKEN`。
+前置：需要环境变量 `GLYNK_TOKEN`。`GLYNK_API_URL` 默认使用公共入口 `https://brainow.link`；如果手动设置，也应指向前端域名，由同域 `/api` 反代到后端，不要使用后端 IP 或本地端口。所有接口均需 `Authorization: Bearer $GLYNK_TOKEN`。
 
 ## URL 发布
 
@@ -30,7 +30,7 @@ curl -X POST "$GLYNK_API_URL/api/publications/upload" \
 
 支持格式：`.epub`、`.pdf`、`.html`、`.md`、`.zip`（md + 图片打包）。
 
-如果内容已存在（URL 或文件 hash 匹配），返回已有 Unit 信息和 `"existing": true`。
+内容 hash 匹配（同样的文件）则返回已有 Unit 信息和 `"existing": true`（幂等）。URL 不参与去重——同一 URL 重新拉取到新内容会创建新 Unit（除非走 `update_of`，见下）。
 
 ## Markdown 上传（含本地图片）
 
@@ -118,9 +118,43 @@ curl -X DELETE "$GLYNK_API_URL/api/sources/{id}" \
 
 发布成功后，如果需要阅读该内容，可以参照 ``glk-read`` skill。
 
+## 更新已发布内容（`update_of`）
+
+内容变了（作者改稿、重新解析、修正 md）想在**不变 unit_id** 的前提下替换内容，用 `?update_of={unit_id}`：
+
+```bash
+# URL 重新拉取并更新
+curl -X POST "$GLYNK_API_URL/api/publications?update_of=abc123..." \
+  -H "Authorization: Bearer $GLYNK_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"source":"https://example.com/article"}'
+
+# 文件重新上传并更新
+curl -X POST "$GLYNK_API_URL/api/publications/upload?update_of=abc123..." \
+  -H "Authorization: Bearer $GLYNK_TOKEN" \
+  -F "file=@fixed.md"
+
+# Markdown 脚本同样支持（传 --update-of）
+python <this_skill_dir>/upload_md.py post.md --update-of abc123...
+```
+
+行为：
+
+- `unit_id` 不变 → 所有阅读器链接、阅读进度、别人的 anchor 的 target_unit 都不受影响
+- `body` / HTML 文件 / TOC / `metadata.content_hash` / `metadata.title` 等全部替换
+- **自己的 span 级 anchor 自动迁移**：
+  - Tier 1 精确匹配 → 指向新 span_id
+  - Tier 2 相似度 ≥ 85% → 指向新 span_id，`metadata.migration.confidence=fuzzy`
+  - Tier 3 找不到 → `target_span=null`，降级为 Unit 级 anchor，原文保留在 `metadata.migration.original_text`
+- 迁移总体统计存在 Unit 的 `metadata.migration_stats`
+
+**什么时候用 update_of**：内容整体是"同一篇文章的新版本"，你希望原有的标注尽量跟过去。
+
+**什么时候不用**：两份内容实际是不同东西（哪怕 URL 相同），让它们作为两个独立 Unit 存在，不互相影响。
+
 ## 删除（发布出问题时恢复用）
 
-如果发布出了问题（比如图片没一起打包进 zip、md 解析出预期外的结果），**先删掉重传**，不要想着"修"—— unit_id 是内容 hash，同一份 md 重传会被 dedup，删干净再传才会走完整摄入。
+如果发布出了问题（图片没打包、解析异常），优先用 `update_of` 重新发布修正版；**删除**是彻底重来的选项：
 
 ```bash
 curl -X DELETE "$GLYNK_API_URL/api/publications/{unit_id}" \
@@ -132,21 +166,6 @@ curl -X DELETE "$GLYNK_API_URL/api/publications/{unit_id}" \
 - **只能删自己导入的**（`metadata.imported_by == 当前 entity_id`，否则 403）
 - 只能删 publication（thought 不在本端点范围，403/400）
 - 删除会级联清掉：reading_progress/sessions、event_log 里的相关记录、所有标注这个 publication 的 authored Unit（别人的 highlight / hook / note 也一并消失）、file store 里的 HTML + 图片目录
-
-典型恢复流程：
-
-```bash
-# 1. 传了，发现图片没跟上（reader 里图裂）
-python upload_md.py post.md
-# → unit_id=abc...
-
-# 2. 检查问题（看看图片是不是没打包）
-# upload_md.py 会打印 "N image(s) uploaded"；为 0 就是漏了
-
-# 3. 删掉，修 md 里的图片引用路径后重传
-curl -X DELETE "$GLYNK_API_URL/api/publications/abc..." -H "Authorization: Bearer $GLYNK_TOKEN"
-python upload_md.py post.md
-```
 
 ---
 

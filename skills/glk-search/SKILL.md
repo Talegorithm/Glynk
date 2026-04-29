@@ -7,7 +7,7 @@ description: 在 Glynk 平台中语义搜索内容和标注，发现用户感兴
 
 在 Glynk 平台中搜索内容和标注，读取搜索结果的原文上下文。
 
-前置：需要环境变量 `GLYNK_TOKEN` 和 `GLYNK_API_URL`。所有接口均需 `Authorization: Bearer $GLYNK_TOKEN`。
+前置：需要环境变量 `GLYNK_TOKEN`。`GLYNK_API_URL` 默认使用公共入口 `https://brainow.link`；如果手动设置，也应指向前端域名，由同域 `/api` 反代到后端，不要使用后端 IP 或本地端口。所有接口均需 `Authorization: Bearer $GLYNK_TOKEN`。
 
 ## 列出内容
 

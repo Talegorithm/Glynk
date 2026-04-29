@@ -2,10 +2,16 @@
 IngestionPipeline - 摄入流水线
 
 结构化处理：parse -> HTML标准化 -> 保存为 Unit。不跑LLM（例外：ASR 转写见 ingest_media）。
+
+Unit 身份 = 随机 ID（创建时固定，永不变）。内容指纹放 metadata.content_hash。
+同内容二次 ingest 走 hash 命中路径，幂等返回已有 Unit。
+内容更新走 update_of 路径：unit_id 不变，body/metadata 原地替换，span anchor 自动迁移。
 """
 import hashlib
 import json
+import secrets
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 from typing import Union
@@ -18,6 +24,7 @@ from glynk.config import AppConfig
 from glynk.models import IngestResult, ParsedContent, TOCItem
 from glynk.ingestion.registry import HandlerRegistry
 from glynk.ingestion.processing.html_processor import HTMLProcessor
+from glynk.ingestion.anchor_migration import migrate_span_anchors
 from glynk.storage.file_store import FileStore
 
 logger = logging.getLogger(__name__)
@@ -28,7 +35,14 @@ def media_oss_key(unit_id: str, filename: str) -> str:
     return f"ingest_inbox/{unit_id}/{filename}"
 
 
+def _new_unit_id() -> str:
+    """生成新的 Unit ID（16 位随机 hex，和旧的 content-hash-based ID 格式一致）。"""
+    return secrets.token_hex(8)
+
+
 class ContentAlreadyExistsError(Exception):
+    """同 content_hash 已有 Unit。不是错误，是幂等返回。"""
+
     def __init__(self, unit: dict):
         self.unit = unit
         super().__init__(f"Content already exists: {unit.get('id')}")
@@ -52,22 +66,6 @@ class IngestionPipeline:
             self._oss_client = OSSClient(self.config.oss)
         return self._oss_client
 
-    @staticmethod
-    def _normalize_url(url: str) -> str:
-        """归一化 URL"""
-        from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
-        parsed = urlparse(url)
-        params = parse_qs(parsed.query, keep_blank_values=False)
-        tracking_keys = {
-            'mpshare', 'scene', 'srcid', 'sharer_shareinfo',
-            'sharer_shareinfo_first', 'share_token', 'from', 'isappinstalled',
-            'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term',
-            'fbclid', 'gclid', 'ref', 'source',
-        }
-        cleaned = {k: v for k, v in params.items() if k.lower() not in tracking_keys}
-        sorted_query = urlencode(cleaned, doseq=True)
-        return urlunparse((parsed.scheme, parsed.netloc, parsed.path, '', sorted_query, ''))
-
     def _get_or_create_author_entity(self, author_name: str) -> str:
         """为内容作者创建 dormant Entity（去重：同名复用同一个）"""
         if not author_name:
@@ -88,7 +86,8 @@ class IngestionPipeline:
 
     async def ingest(self, source: Union[str, Path], entity_id: str = None,
                      content_type: str = None,
-                     source_hint: str = "") -> IngestResult:
+                     source_hint: str = "",
+                     update_of: str | None = None) -> IngestResult:
         """
         摄入内容，产出 Unit(origin=ingested, shape=structured)。
 
@@ -97,83 +96,54 @@ class IngestionPipeline:
             entity_id: 提交者 entity_id（imported_by）
             content_type: 明确指定内容类型
             source_hint: 来源提示
+            update_of: 指定要更新的 Unit ID。unit_id 不变，body/metadata 原地替换，
+                       span anchor 自动迁移（tier 1/2/3）。
         """
-        # 1. URL 去重
-        source_url = None
-        if isinstance(source, str) and source.startswith('http'):
-            source_url = source
-            normalized = self._normalize_url(source)
-            existing_by_url = self.db.get_unit_by_source_url(normalized)
-            if existing_by_url:
-                raise ContentAlreadyExistsError(existing_by_url)
-
-        # 2. 获取文件
+        # 1. 获取文件
+        source_url = source if isinstance(source, str) and source.startswith('http') else None
         file_path = await self._resolve_source(source)
         if not source_hint and source_url:
             source_hint = urlparse(source_url).netloc
 
-        # 3. 计算 unit_id + 去重
-        file_hash = self._calculate_file_hash(file_path)
-        unit_id = file_hash[:16]
-        existing = self.db.get_unit(unit_id)
-        if existing:
-            old_chars = (existing.get('metadata') or {}).get('total_chars', 0) or 0
-            old_imported_by = (existing.get('metadata') or {}).get('imported_by', '')
-            if old_chars < 3000 and (not old_imported_by or old_imported_by == entity_id):
-                logger.info(f"Overwriting unit {unit_id} (old chars={old_chars})")
-                self.db.delete_unit(unit_id)
-                self.file_store.delete_unit_dir(unit_id)
-            else:
-                raise ContentAlreadyExistsError(existing)
+        # 2. 计算 content_hash
+        content_hash = self._calculate_file_hash(file_path)
 
-        # 4. 选择 handler，解析
+        # 3. update 路径：unit_id 不变，原地替换
+        if update_of:
+            return await self._update_unit(
+                unit_id=update_of, file_path=file_path,
+                content_hash=content_hash, source_url=source_url,
+                entity_id=entity_id, content_type=content_type,
+                source_hint=source_hint,
+            )
+
+        # 4. 新 ingest：hash 命中则幂等返回
+        existing = self.db.get_unit_by_content_hash(content_hash)
+        if existing:
+            raise ContentAlreadyExistsError(existing)
+
+        # 5. 生成新 unit_id + 解析 + 持久化
+        unit_id = _new_unit_id()
         handler = self.registry.resolve(file_path, content_type, source_hint)
         parsed = handler.parse(file_path)
 
-        # 5. HTML 标准化
-        processed_files = []
-        total_chars = 0
+        processed_files, total_chars = self._write_processed_html(unit_id, parsed)
+        toc_list = self._build_toc(unit_id, parsed, len(processed_files))
 
-        for file_idx, raw_html in enumerate(parsed.raw_html_parts):
-            processor = HTMLProcessor(unit_id, file_idx)
-            result = processor.process(raw_html, parsed.images)
-            processed_files.append(result)
-
-            self.file_store.write_html(unit_id, f"{file_idx}.html", result.html)
-
-            for img_name, img_data in result.images.items():
-                self.file_store.write_bytes(unit_id, img_name, img_data)
-
-            total_chars += result.sentence_count * 50
-
-        # 6. TOC
-        toc_list = [item.to_dict() for item in parsed.toc] if parsed.toc else []
-        if toc_list and parsed.file_names:
-            # Handler 给了带 anchor 的 TOC（EPUB NCX 等），走 href → span_id 解析
-            self._map_toc_to_span_ids(toc_list, parsed.file_names, unit_id)
-        elif not toc_list:
-            # Handler 没给 TOC → 从标准化 HTML 的 h1-h6 自动抽，直接拿 span_id
-            toc_list = self._extract_toc_from_headings(unit_id, len(processed_files))
-
-        # 7. 创建作者 Entity（dormant）
         author_entity_id = self._get_or_create_author_entity(parsed.author)
 
-        # 8. 保存 Unit
         self.db.create_unit(
             unit_id=unit_id,
             author_id=author_entity_id,
             origin='ingested',
             shape='structured',
-            body={
-                "toc": toc_list,
-                "file_count": len(processed_files),
-            },
+            body={"toc": toc_list, "file_count": len(processed_files)},
             metadata={
                 "title": parsed.title,
                 "abstract": parsed.abstract,
                 "source_type": parsed.content_type,
-                "source_url": source if isinstance(source, str) and source.startswith('http') else None,
-                "source_file_hash": file_hash,
+                "source_url": source_url,
+                "content_hash": content_hash,
                 "total_chars": total_chars,
                 "imported_by": entity_id,
                 "status": "ready",
@@ -191,6 +161,115 @@ class IngestionPipeline:
             toc=toc_list,
         )
 
+    async def _update_unit(self, unit_id: str, file_path: Path, content_hash: str,
+                           source_url: str | None, entity_id: str,
+                           content_type: str | None, source_hint: str) -> IngestResult:
+        """Publication 原地更新：unit_id 不变，替换 body / HTML 文件，迁移 span anchor。"""
+        existing = self.db.get_unit(unit_id)
+        if not existing:
+            raise ValueError(f"Unit {unit_id!r} not found (update_of)")
+        if existing.get('origin') != 'ingested':
+            raise ValueError(f"Unit {unit_id!r} is not a publication (origin={existing.get('origin')})")
+
+        existing_meta = existing.get('metadata') or {}
+        if existing_meta.get('content_hash') == content_hash:
+            # 内容没变，什么都不用做
+            logger.info(f"update_of {unit_id}: content unchanged, no-op")
+            body = existing.get('body') or {}
+            return IngestResult(
+                unit_id=unit_id,
+                title=existing_meta.get('title', ''),
+                author=existing.get('author_name', ''),
+                author_entity_id=existing.get('author_id', ''),
+                source_type=existing_meta.get('source_type', ''),
+                file_count=body.get('file_count', 0),
+                total_chars=existing_meta.get('total_chars', 0),
+                toc=body.get('toc', []),
+            )
+
+        # 1. 快照旧 HTML（供 anchor 迁移）
+        old_file_count = (existing.get('body') or {}).get('file_count', 0)
+        old_htmls: dict[int, str] = {}
+        for idx in range(old_file_count):
+            html = self.file_store.read_html(unit_id, f"{idx}.html")
+            if html is not None:
+                old_htmls[idx] = html
+
+        # 2. 清掉老文件，解析新内容
+        self.file_store.delete_unit_dir(unit_id)
+        handler = self.registry.resolve(file_path, content_type, source_hint)
+        parsed = handler.parse(file_path)
+
+        processed_files, total_chars = self._write_processed_html(unit_id, parsed)
+        toc_list = self._build_toc(unit_id, parsed, len(processed_files))
+
+        # 3. 收集新 HTML 供 anchor 迁移
+        new_htmls: dict[int, str] = {}
+        for idx in range(len(processed_files)):
+            html = self.file_store.read_html(unit_id, f"{idx}.html")
+            if html is not None:
+                new_htmls[idx] = html
+
+        # 4. 迁移 span anchor
+        stats = migrate_span_anchors(unit_id, self.db, old_htmls, new_htmls)
+
+        # 5. 更新 Unit metadata + body
+        new_meta = dict(existing_meta)
+        new_meta.update({
+            "title": parsed.title or existing_meta.get('title', ''),
+            "abstract": parsed.abstract or existing_meta.get('abstract', ''),
+            "source_type": parsed.content_type,
+            "source_url": source_url or existing_meta.get('source_url'),
+            "content_hash": content_hash,
+            "total_chars": total_chars,
+            "updated_by": entity_id,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "migration_stats": stats,
+        })
+        self.db.update_unit(
+            unit_id=unit_id,
+            body={"toc": toc_list, "file_count": len(processed_files)},
+            metadata=new_meta,
+        )
+
+        logger.info(f"update_of {unit_id} done: migration={stats}")
+
+        return IngestResult(
+            unit_id=unit_id,
+            title=new_meta['title'],
+            author=parsed.author,
+            author_entity_id=existing.get('author_id', ''),
+            source_type=parsed.content_type,
+            file_count=len(processed_files),
+            total_chars=total_chars,
+            toc=toc_list,
+        )
+
+    def _write_processed_html(self, unit_id: str, parsed: ParsedContent):
+        """处理 HTML + 写文件 + 写图片。返回 (processed_files, total_chars)。"""
+        processed_files = []
+        total_chars = 0
+        for file_idx, raw_html in enumerate(parsed.raw_html_parts):
+            processor = HTMLProcessor(unit_id, file_idx)
+            result = processor.process(raw_html, parsed.images)
+            processed_files.append(result)
+
+            self.file_store.write_html(unit_id, f"{file_idx}.html", result.html)
+            for img_name, img_data in result.images.items():
+                self.file_store.write_bytes(unit_id, img_name, img_data)
+
+            total_chars += result.sentence_count * 50
+        return processed_files, total_chars
+
+    def _build_toc(self, unit_id: str, parsed: ParsedContent, file_count: int) -> list[dict]:
+        """从 parsed.toc 或 heading 建 TOC。"""
+        toc_list = [item.to_dict() for item in parsed.toc] if parsed.toc else []
+        if toc_list and parsed.file_names:
+            self._map_toc_to_span_ids(toc_list, parsed.file_names, unit_id)
+        elif not toc_list:
+            toc_list = self._extract_toc_from_headings(unit_id, file_count)
+        return toc_list
+
     async def ingest_media(
         self,
         unit_id: str,
@@ -200,13 +279,16 @@ class IngestionPipeline:
         entity_id: str,
         author: str = "",
         source_url: str | None = None,
-        file_hash: str | None = None,
+        content_hash: str | None = None,
     ) -> IngestResult:
         """
         转写已上传到 OSS 的媒体文件，生成带时间戳的 HTML，落地为 Unit。
 
-        前置：agent 通过 /ingest/media/init 拿到 presigned PUT URL，
+        前置：agent 通过 /publications/media/init 拿到 unit_id + presigned PUT URL，
         把文件上传到 oss://{bucket}/{media_oss_key(unit_id, filename)}。
+
+        unit_id 由 init 端点分配（和其他 ingest 一样是随机 ID）。content_hash 作为 metadata 存，
+        用于后续同内容 dedup。
         """
         from glynk.ingestion.asr import transcribe
         from glynk.ingestion.media_html import build_media_html
@@ -265,7 +347,7 @@ class IngestionPipeline:
                 "title": title,
                 "source_type": media_type,
                 "source_url": source_url,
-                "source_file_hash": file_hash,
+                "content_hash": content_hash,
                 "total_chars": total_chars,
                 "imported_by": entity_id,
                 "status": "ready",

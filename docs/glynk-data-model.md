@@ -26,13 +26,13 @@ CREATE TABLE entities (
 
 ```sql
 CREATE TABLE units (
-  id            TEXT PRIMARY KEY,         -- ingested 用 sha256[:16]；authored 用 ULID
+  id            TEXT PRIMARY KEY,         -- 随机 16 位 hex，创建时固定，永不变
   author_id     TEXT NOT NULL REFERENCES entities(id),
   origin        TEXT NOT NULL,            -- ingested | authored
   shape         TEXT NOT NULL DEFAULT 'flat',   -- flat | structured
   body          JSONB NOT NULL,           -- flat: {html} | structured: {toc, files, media}
   visibility    JSONB DEFAULT '{"type":"private"}',
-  metadata      JSONB DEFAULT '{}',       -- title, tags, source_url, material_type, genre, ...
+  metadata      JSONB DEFAULT '{}',       -- title, tags, source_url, content_hash, ...
   vector        vector(3072),             -- nullable；短 Unit 直接 embed，长 Unit 通过 chunk 派生
   vector_text   TEXT,                     -- 被 embed 的原文
   created_at    TIMESTAMPTZ DEFAULT NOW()
@@ -41,8 +41,16 @@ CREATE TABLE units (
 CREATE INDEX idx_units_author ON units(author_id);
 CREATE INDEX idx_units_origin ON units(origin);
 CREATE INDEX idx_units_metadata ON units USING GIN(metadata);
+CREATE INDEX idx_units_content_hash ON units((metadata->>'content_hash'));
 CREATE INDEX idx_units_vector ON units USING ivfflat(vector vector_cosine_ops) WITH (lists = 100);
 ```
+
+**Unit 身份 vs 内容指纹**：
+
+- `unit_id` = 随机 16 位 hex，**创建时固定，永不变**。是身份码。
+- `metadata.content_hash` = sha256(body)，**内容变就变**。是内容指纹，也是 ingest 去重的键。
+
+这个拆分让"内容更新"成为可能——同一个 unit_id 在不同时间可以承载不同版本内容。阅读器链接、anchor 的 target_unit、阅读进度等都挂在稳定的 unit_id 上，不会因为内容更新而断。
 
 ### Anchor
 
@@ -127,6 +135,41 @@ Embedding 决策**不看 role** —— ROLE_SCHEMAS 已经保证了 body 的存�
 
 ---
 
+## Ingest / Update 语义
+
+### 去重
+
+只有一层：`metadata.content_hash`。
+
+- 同内容再次 ingest → 命中 hash，幂等返回已有 Unit（不做任何工作）
+- 不同内容（哪怕同 URL）→ 新建 Unit，新 `unit_id`
+- URL 不是唯一键，只是 metadata 字段
+
+### In-place 更新（`update_of`）
+
+`POST /api/publications?update_of={unit_id}` 触发**原地更新**：
+
+- `unit_id` 不变
+- `body` / HTML 文件 / TOC / `metadata.content_hash` 全部替换
+- `metadata.updated_by` / `metadata.updated_at` 记录更新操作
+- **Span 级 anchor 自动迁移**（见下）
+
+链接、阅读进度、别人的 anchor 的 `target_unit` 都不受影响，因为 unit_id 是稳定的。
+
+### Span anchor 迁移（tier 1/2/3）
+
+当一个 Unit 被 `update_of` 更新时，`[glynk/ingestion/anchor_migration.py](../glynk/ingestion/anchor_migration.py)` 自动对所有 `target_unit = unit_id AND target_span IS NOT NULL` 的 anchor 执行：
+
+1. **Tier 1 `exact`**：旧 span 文本在新内容中唯一精确匹配 → 更新 `target_span`
+2. **Tier 2 `fuzzy`**：相似度 ≥ 85%（SequenceMatcher）→ 更新 `target_span`，记录 `metadata.migration.similarity`
+3. **Tier 3 `orphan`**：找不到 → `target_span = NULL`，`target_type = 'unit'`，`metadata.migration.original_text` 保留原文供后续人工/Agent 重定位
+
+迁移结果写在 `metadata.migration = {confidence, old_span, similarity?, original_text?}` 里，`Unit.metadata.migration_stats` 记录总体统计。
+
+Orphan 的 anchor 仍挂在新 Unit 上（只是没 span 位置），reader UI 可在"未对齐的标注"区展示。
+
+---
+
 ## Sidecar 表
 
 ### Auth（从 Entity 分离）
@@ -206,12 +249,12 @@ CREATE TABLE rss_sources (
 
 | 旧字段 | 新位置 |
 |---|---|
-| content_id | unit.id（保留 sha256[:16]）|
+| content_id | unit.id（老 Unit 的 ID 保留 sha256[:16]；新 Unit 的 ID 是随机 16 hex）|
 | title | metadata.title |
 | author | 创建 dormant Entity，unit.author_id 指向它 |
 | source_type | metadata.source_type |
 | source_url | metadata.source_url |
-| source_file_hash | metadata.source_file_hash |
+| source_file_hash | metadata.content_hash |
 | file_count | body.file_count |
 | toc_json | body.toc |
 | ai_outline_json | metadata.ai_outline |

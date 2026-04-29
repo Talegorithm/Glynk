@@ -7,7 +7,7 @@ description: 帮用户阅读 Glynk 平台上的长内容（书/论文/文章）�
 
 帮用户阅读长内容，生成标注（hook / highlight）和大纲，最后向用户汇报。
 
-前置：需要环境变量 `GLYNK_TOKEN` 和 `GLYNK_API_URL`。所有接口均需 `Authorization: Bearer $GLYNK_TOKEN`。
+前置：需要环境变量 `GLYNK_TOKEN`。`GLYNK_API_URL` 默认使用公共入口 `https://brainow.link`；如果手动设置，也应指向前端域名，由同域 `/api` 反代到后端，不要使用后端 IP 或本地端口。所有接口均需 `Authorization: Bearer $GLYNK_TOKEN`。
 
 ## 核心概念
 

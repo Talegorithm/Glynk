@@ -6,7 +6,7 @@ disable-model-invocation: false
 
 **目标**：把一个外部 URL 变成 Glynk 里一条高质量的 publication unit。"高质量"的前提是——内容来自**第一手源**，不是社媒平台的转述或片段。
 
-前置：`GLYNK_TOKEN` / `GLYNK_API_URL` 环境变量（和 `glk-add` 共用）。
+前置：`GLYNK_TOKEN` 环境变量；`GLYNK_API_URL` 和 `glk-add` 共用，默认公共入口是 `https://brainow.link`。如果手动设置，也应指向前端域名，由同域 `/api` 反代到后端，不要使用后端 IP 或本地端口。
 
 ## 工作流程
 

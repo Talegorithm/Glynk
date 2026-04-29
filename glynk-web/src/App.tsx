@@ -9,6 +9,9 @@ import LoginPage from './pages/LoginPage';
 import LibraryPage from './pages/LibraryPage';
 import ReaderPage from './pages/ReaderPage';
 import NotesPage from './pages/NotesPage';
+import TimetrackIndex from './pages/Timetrack/index';
+import TimetrackStats from './pages/Timetrack/Stats';
+import TimetrackLayout from './pages/Timetrack/TimetrackLayout';
 import { TimeGradientBg } from './components/background/TimeGradientBg';
 import { useThemeStore } from './store/theme';
 
@@ -28,6 +31,13 @@ export default function App() {
           <Route element={<PrivateRoute />}>
             <Route path="/library" element={<LibraryPage />} />
             <Route path="/notes" element={<NotesPage />} />
+          </Route>
+        </Route>
+
+        <Route element={<PrivateRoute />}>
+          <Route element={<TimetrackLayout />}>
+            <Route path="/timetrack" element={<TimetrackIndex />} />
+            <Route path="/timetrack/stats" element={<TimetrackStats />} />
           </Route>
         </Route>
 

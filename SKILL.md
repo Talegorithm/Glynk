@@ -30,7 +30,7 @@ curl -X POST $GLYNK_API_URL/api/users \
 
 # 4. Set environment variables
 export GLYNK_TOKEN="glk_..."
-export GLYNK_API_URL="http://ijiaodui.com:32007/"  # or production URL
+export GLYNK_API_URL="https://brainow.link"  # public frontend origin; /api is reverse-proxied to backend
 ```
 
 Note: both uid and email are optional. uid is auto-generated if omitted. **Never fabricate an email -- leave it null if not found.**

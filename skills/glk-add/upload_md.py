@@ -10,7 +10,7 @@ Markdown 上传工具（自包含，零外部依赖）
   python upload_md.py post.md  # 默认用环境变量 GLYNK_API_URL 和 GLYNK_TOKEN
 
 环境变量:
-  GLYNK_API_URL  服务器地址（默认 http://localhost:8000）
+  GLYNK_API_URL  服务器地址（默认 https://brainow.link；通过前端域名反代 /api）
   GLYNK_TOKEN    认证 token
 """
 import argparse
@@ -24,6 +24,9 @@ import zipfile
 from pathlib import Path
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
+
+
+DEFAULT_SERVER = "https://brainow.link"
 
 
 def find_local_images(md_text: str) -> list[str]:
@@ -104,7 +107,8 @@ def multipart_encode(fields: dict, files: dict) -> tuple[bytes, str]:
     return body, content_type
 
 
-def upload(md_path: Path, server: str, token: str) -> dict:
+def upload(md_path: Path, server: str, token: str,
+           update_of: str | None = None) -> dict:
     md_text = md_path.read_text(encoding='utf-8')
     image_refs = find_local_images(md_text)
 
@@ -144,7 +148,11 @@ def upload(md_path: Path, server: str, token: str) -> dict:
         file_data = md_text.encode('utf-8')
 
     url = f"{server.rstrip('/')}/api/publications/upload"
-    print(f"Uploading {filename} to {url} ...")
+    if update_of:
+        url += f"?update_of={update_of}"
+        print(f"Updating {update_of} with {filename} ...")
+    else:
+        print(f"Uploading {filename} to {url} ...")
 
     body, ct = multipart_encode({}, {"file": (filename, file_data, content_type)})
     req = Request(url, data=body, method='POST')
@@ -171,8 +179,10 @@ def upload(md_path: Path, server: str, token: str) -> dict:
 def main():
     parser = argparse.ArgumentParser(description="Upload Markdown to Glynk")
     parser.add_argument("file", type=Path, help="Markdown file path")
-    parser.add_argument("--server", default=os.environ.get("GLYNK_API_URL", "http://localhost:8000"))
+    parser.add_argument("--server", default=os.environ.get("GLYNK_API_URL", DEFAULT_SERVER))
     parser.add_argument("--token", default=os.environ.get("GLYNK_TOKEN"))
+    parser.add_argument("--update-of", default=None,
+                        help="Existing unit_id to update in place (unit_id stays, content replaced, span anchors migrated)")
 
     args = parser.parse_args()
 
@@ -186,7 +196,7 @@ def main():
         print(f"Expected .md file, got: {args.file.suffix}")
         sys.exit(1)
 
-    upload(args.file, args.server, args.token)
+    upload(args.file, args.server, args.token, update_of=args.update_of)
 
 
 if __name__ == "__main__":

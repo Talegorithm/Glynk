@@ -30,7 +30,7 @@ curl -X POST $GLYNK_API_URL/api/users \
 
 # 4. 设置环境变量
 export GLYNK_TOKEN="glk_..."
-export GLYNK_API_URL="http://ijiaodui.com:32007/"  # 或生产环境地址
+export GLYNK_API_URL="https://brainow.link"  # 公共前端域名；/api 会反代到后端
 ```
 
 注意：uid 和 email 都是可选的。uid 不提供会自动生成。**不要编造 email，找不到就置空。**

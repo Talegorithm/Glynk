@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS units (
 CREATE INDEX IF NOT EXISTS idx_units_author ON units(author_id);
 CREATE INDEX IF NOT EXISTS idx_units_origin ON units(origin);
 CREATE INDEX IF NOT EXISTS idx_units_metadata ON units USING GIN(metadata);
+CREATE INDEX IF NOT EXISTS idx_units_content_hash ON units((metadata->>'content_hash'));
 
 -- Core: Anchor
 CREATE TABLE IF NOT EXISTS anchors (
@@ -361,13 +362,15 @@ class PostgresStore:
             (unit_id,), fetch='one',
         )
 
-    def get_unit_by_source_url(self, normalized_url: str) -> Optional[dict]:
+    def get_unit_by_content_hash(self, content_hash: str) -> Optional[dict]:
+        """按内容 hash 查找 Unit。用于摄入去重（同内容幂等）。"""
         return self._execute(
-            """SELECT * FROM units
-               WHERE metadata->>'source_url' LIKE %s
-                 AND metadata->>'status' = 'ready'
+            """SELECT u.*, e.display_name as author_name
+               FROM units u JOIN entities e ON u.author_id = e.id
+               WHERE u.metadata->>'content_hash' = %s
+                 AND u.metadata->>'status' = 'ready'
                LIMIT 1""",
-            (normalized_url + '%',), fetch='one',
+            (content_hash,), fetch='one',
         )
 
     def list_units(self, origin: str = None, limit: int = 100, offset: int = 0,

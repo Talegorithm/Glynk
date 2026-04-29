@@ -16,7 +16,7 @@
   python upload_media.py video.mp4 --media-type video --title "Demo"
 
 环境变量:
-  GLYNK_API_URL  服务器地址（默认 http://localhost:8000）
+  GLYNK_API_URL  服务器地址（默认 https://brainow.link；通过前端域名反代 /api）
   GLYNK_TOKEN    认证 token
 """
 import argparse
@@ -35,6 +35,7 @@ from urllib.error import HTTPError
 AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".wma"}
 VIDEO_EXTS = {".mp4", ".mkv", ".webm", ".mov", ".avi"}
 PASSTHROUGH_EXTS = {".mp3", ".wav", ".mp4"}  # DashScope 直接收
+DEFAULT_SERVER = "https://brainow.link"
 
 
 def infer_media_type(path: Path) -> str:
@@ -176,7 +177,7 @@ def main():
     parser.add_argument("--author")
     parser.add_argument("--keep-converted", action="store_true",
                         help="save the transcoded mp3 next to original")
-    parser.add_argument("--server", default=os.environ.get("GLYNK_API_URL", "http://localhost:8000"))
+    parser.add_argument("--server", default=os.environ.get("GLYNK_API_URL", DEFAULT_SERVER))
     parser.add_argument("--token", default=os.environ.get("GLYNK_TOKEN"))
 
     args = parser.parse_args()

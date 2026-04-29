@@ -41,6 +41,10 @@ async def lifespan(app: FastAPI):
 
     db = PostgresStore(config.storage)
     PostgresStore._instance = db
+    
+    # Initialize timetrack tables
+    from glynk.timetrack.db import init_timetrack_tables
+    init_timetrack_tables()
 
     file_store = config.create_file_store()
 
@@ -113,6 +117,7 @@ from glynk.api.annotation_router import router as anchor_router
 from glynk.api.source_router import router as source_router
 from glynk.api.feedback_router import router as feedback_router
 from glynk.api.internal_router import router as internal_router
+from glynk.timetrack.router import router as timetrack_router
 
 app.include_router(auth_router, prefix="/api")
 app.include_router(ingest_router, prefix="/api")
@@ -121,6 +126,7 @@ app.include_router(anchor_router, prefix="/api")
 app.include_router(source_router, prefix="/api")
 app.include_router(feedback_router, prefix="/api")
 app.include_router(internal_router, prefix="/api")
+app.include_router(timetrack_router, prefix="/api")
 
 
 # ===== Media =====

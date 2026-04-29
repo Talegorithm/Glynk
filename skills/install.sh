@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# 把 Agent 仓库的 skills/ 同步到 ~/.claude/skills/
+# 把 Agent 仓库的 skills/ 同步到本机 Agent skill 目录。
 #
 # 默认用 **symlink**：源头在 repo，edit-in-repo 立即生效，适合本机开发。
 # 跨机器部署/发布用 --copy：把文件 rsync 过去，脱离 repo。
@@ -15,17 +15,22 @@
 # 盲目 backup 会污染 ~/.claude/skills/（Claude Code 会把 .bak.* 当 skill 索引）。
 #
 # 用法：
-#   bash install.sh                  # symlink 模式（默认，冲突即失败）
+#   bash install.sh                  # 装到 Claude：~/.claude/skills（默认）
+#   bash install.sh --codex          # 装到 Codex：~/.codex/skills
+#   bash install.sh --both           # 同时装到 Claude + Codex
 #   bash install.sh --copy           # copy 模式
 #   bash install.sh --force          # 冲突时强制覆盖
-#   bash install.sh --target DIR     # 改安装目录（默认 ~/.claude/skills）
+#   bash install.sh --target DIR     # 改安装目录（覆盖 --claude/--codex/--both）
 #   bash install.sh --dry-run        # 只打印会做什么，不动文件
 #   bash install.sh --skills a,b     # 只装指定的（默认全装）
 #
 set -euo pipefail
 
 REPO_SKILLS_DIR="$(cd "$(dirname "$0")" && pwd)"
-TARGET_DIR="${HOME}/.claude/skills"
+TARGET_DIR=""
+TARGET_SPECIFIED=0
+INSTALL_CLAUDE=1
+INSTALL_CODEX=0
 MODE="symlink"
 DRY_RUN=0
 FORCE=0
@@ -35,7 +40,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --copy)     MODE="copy"; shift ;;
     --symlink)  MODE="symlink"; shift ;;
-    --target)   TARGET_DIR="$2"; shift 2 ;;
+    --claude)   INSTALL_CLAUDE=1; INSTALL_CODEX=0; shift ;;
+    --codex)    INSTALL_CLAUDE=0; INSTALL_CODEX=1; shift ;;
+    --both)     INSTALL_CLAUDE=1; INSTALL_CODEX=1; shift ;;
+    --target)   TARGET_DIR="$2"; TARGET_SPECIFIED=1; shift 2 ;;
     --dry-run)  DRY_RUN=1; shift ;;
     --force)    FORCE=1; shift ;;
     --skills)   ONLY_SKILLS="$2"; shift 2 ;;
@@ -45,6 +53,14 @@ while [[ $# -gt 0 ]]; do
     *) echo "unknown arg: $1" >&2; exit 1 ;;
   esac
 done
+
+if [[ $TARGET_SPECIFIED -eq 1 ]]; then
+  target_dirs=("$TARGET_DIR")
+else
+  target_dirs=()
+  [[ $INSTALL_CLAUDE -eq 1 ]] && target_dirs+=("${HOME}/.claude/skills")
+  [[ $INSTALL_CODEX -eq 1 ]] && target_dirs+=("${HOME}/.codex/skills")
+fi
 
 run() {
   if [[ $DRY_RUN -eq 1 ]]; then
@@ -69,56 +85,61 @@ fi
 
 echo "mode   : $MODE"
 echo "source : $REPO_SKILLS_DIR"
-echo "target : $TARGET_DIR"
+echo "targets: ${target_dirs[*]}"
 echo "force  : $FORCE"
 echo "skills : ${skills[*]}"
 echo "---"
 
-run "mkdir -p '$TARGET_DIR'"
-
 conflict_count=0
-for name in "${skills[@]}"; do
-  src="$REPO_SKILLS_DIR/$name"
-  dst="$TARGET_DIR/$name"
 
-  if [[ ! -d "$src" ]]; then
-    echo "⚠ skip (not found in repo): $name"
-    continue
-  fi
+for target_dir in "${target_dirs[@]}"; do
+  echo "Installing to $target_dir"
+  run "mkdir -p '$target_dir'"
 
-  # 已经是指向本 repo 的 symlink → 跳过
-  if [[ -L "$dst" ]]; then
-    current="$(readlink "$dst")"
-    if [[ "$current" == "$src" ]]; then
-      echo "= $name (already linked, skip)"
+  for name in "${skills[@]}"; do
+    src="$REPO_SKILLS_DIR/$name"
+    dst="$target_dir/$name"
+
+    if [[ ! -d "$src" ]]; then
+      echo "⚠ skip (not found in repo): $name"
       continue
     fi
-  fi
 
-  # 目标存在但不是我们想要的状态 → 要么 --force 覆盖，要么报错
-  if [[ -e "$dst" || -L "$dst" ]]; then
-    if [[ $FORCE -eq 0 ]]; then
-      echo "✗ $name: target exists → $dst"
-      echo "    (现状: $( [[ -L "$dst" ]] && echo "symlink → $(readlink "$dst")" || echo "directory/file" ))"
-      echo "    用 --force 覆盖；或手动处理后重跑。"
-      conflict_count=$((conflict_count + 1))
-      continue
+    # 已经是指向本 repo 的 symlink → 跳过
+    if [[ -L "$dst" ]]; then
+      current="$(readlink "$dst")"
+      if [[ "$current" == "$src" ]]; then
+        echo "= $name (already linked, skip)"
+        continue
+      fi
     fi
-    echo "↺ $name (forced: removing existing)"
-    run "rm -rf '$dst'"
-  fi
 
-  case "$MODE" in
-    symlink)
-      run "ln -s '$src' '$dst'"
-      echo "✓ $name (symlinked)"
-      ;;
-    copy)
-      run "cp -R '$src' '$dst'"
-      run "rm -rf '$dst/__pycache__'"
-      echo "✓ $name (copied)"
-      ;;
-  esac
+    # 目标存在但不是我们想要的状态 → 要么 --force 覆盖，要么报错
+    if [[ -e "$dst" || -L "$dst" ]]; then
+      if [[ $FORCE -eq 0 ]]; then
+        echo "✗ $name: target exists → $dst"
+        echo "    (现状: $( [[ -L "$dst" ]] && echo "symlink → $(readlink "$dst")" || echo "directory/file" ))"
+        echo "    用 --force 覆盖；或手动处理后重跑。"
+        conflict_count=$((conflict_count + 1))
+        continue
+      fi
+      echo "↺ $name (forced: removing existing)"
+      run "rm -rf '$dst'"
+    fi
+
+    case "$MODE" in
+      symlink)
+        run "ln -s '$src' '$dst'"
+        echo "✓ $name (symlinked)"
+        ;;
+      copy)
+        run "cp -R '$src' '$dst'"
+        run "rm -rf '$dst/__pycache__'"
+        echo "✓ $name (copied)"
+        ;;
+    esac
+  done
+  echo ""
 done
 
 echo ""
@@ -129,7 +150,7 @@ fi
 
 echo "安装完成。"
 if [[ "$MODE" == "symlink" ]]; then
-  echo "symlink 模式：在 $REPO_SKILLS_DIR 下改文件，$TARGET_DIR 自动跟随。"
+  echo "symlink 模式：在 $REPO_SKILLS_DIR 下改文件，目标目录自动跟随。"
 else
   echo "copy 模式：repo 改动后需要重跑本脚本才会同步。"
 fi
