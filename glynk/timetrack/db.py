@@ -162,7 +162,7 @@ class TimetrackStore:
     def delete_session(self, session_id: str, entity_id: str) -> bool:
         result = self.db._execute(
             "DELETE FROM tt_sessions WHERE id = %s AND entity_id = %s RETURNING id",
-            (session_id, entity_id)
+            (session_id, entity_id), fetch='one'
         )
         return bool(result)
 
@@ -189,13 +189,13 @@ class TimetrackStore:
         query += " ORDER BY s.start_time ASC"
         return self.db._execute(query, tuple(params), fetch='all') or []
 
-    def get_today_stats(self, entity_id: str) -> List[dict]:
+    def get_today_stats(self, entity_id: str, since: datetime) -> List[dict]:
         return self.db._execute(
             """SELECT tag_id, SUM(EXTRACT(EPOCH FROM (end_time - start_time))) * 1000 as duration_ms
-               FROM tt_sessions 
-               WHERE entity_id = %s 
-                 AND end_time IS NOT NULL 
-                 AND start_time >= (CURRENT_TIMESTAMP - INTERVAL '4 hours')::date + INTERVAL '4 hours'
+               FROM tt_sessions
+               WHERE entity_id = %s
+                 AND end_time IS NOT NULL
+                 AND start_time >= %s
                GROUP BY tag_id""",
-            (entity_id,), fetch='all'
+            (entity_id, since), fetch='all'
         ) or []

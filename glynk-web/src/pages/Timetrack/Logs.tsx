@@ -2,26 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import type { StatItem } from '../../api/timetrack';
 import { timetrackApi } from '../../api/timetrack';
 import { useTimetrackStore } from '../../store/timetrack';
-
-const getLogicalDate = (d: Date) => {
-  const logical = new Date(d);
-  if (logical.getHours() < 4) {
-    logical.setDate(logical.getDate() - 1);
-  }
-  return logical;
-};
-
-const startOfDay = (d: Date) => {
-  const logical = getLogicalDate(d);
-  return new Date(logical.getFullYear(), logical.getMonth(), logical.getDate(), 4, 0, 0, 0);
-};
-
-const endOfDay = (d: Date) => {
-  const logical = getLogicalDate(d);
-  return new Date(logical.getFullYear(), logical.getMonth(), logical.getDate() + 1, 3, 59, 59, 999);
-};
-
-const addDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n, d.getHours(), d.getMinutes());
+import { startOfDay, endOfDay, addDays } from './dayLogic';
 
 function formatDuration(ms: number) {
   const totalMinutes = Math.floor(ms / 1000 / 60);

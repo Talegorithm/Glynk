@@ -93,5 +93,9 @@ async def get_stats(
     return store.get_stats(user['entity_id'], start_dt, end_dt)
 
 @router.get("/timetrack/stats/today")
-async def get_today_stats(user: dict = Depends(get_current_user), store: TimetrackStore = Depends(get_store)):
-    return store.get_today_stats(user['entity_id'])
+async def get_today_stats(
+    since: str = Query(..., description="ISO timestamp of the user-local logical day start (4am)"),
+    user: dict = Depends(get_current_user),
+    store: TimetrackStore = Depends(get_store)
+):
+    return store.get_today_stats(user['entity_id'], since)

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Tag, Session } from '../api/timetrack';
 import { timetrackApi } from '../api/timetrack';
+import { startOfDay } from '../pages/Timetrack/dayLogic';
 
 interface TimetrackState {
   tags: Tag[];
@@ -75,7 +76,8 @@ export const useTimetrackStore = create<TimetrackState>((set, get) => ({
   },
 
   fetchTodayStats: async () => {
-    const stats = await timetrackApi.getTodayStats();
+    const since = startOfDay(new Date()).toISOString();
+    const stats = await timetrackApi.getTodayStats(since);
     set({ todayStats: stats });
   },
 

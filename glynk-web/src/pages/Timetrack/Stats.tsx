@@ -1,27 +1,12 @@
 import { useEffect, useState, useMemo } from 'react';
 import type { StatItem } from '../../api/timetrack';
 import { timetrackApi } from '../../api/timetrack';
-
-const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-const endOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
-
-const startOfWeek = (d: Date) => {
-  const dt = new Date(d);
-  const day = dt.getDay();
-  const diff = dt.getDate() - day + (day === 0 ? -6 : 1);
-  return startOfDay(new Date(dt.setDate(diff)));
-};
-const endOfWeek = (d: Date) => {
-  const dt = startOfWeek(d);
-  return endOfDay(new Date(dt.setDate(dt.getDate() + 6)));
-};
-
-const startOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1);
-const endOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
-
-const addDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
-const addWeeks = (d: Date, n: number) => addDays(d, n * 7);
-const addMonths = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth() + n, 1); // Default to 1st to avoid overflow
+import {
+  startOfDay, endOfDay,
+  startOfWeek, endOfWeek,
+  startOfMonth, endOfMonth,
+  addDays, addWeeks, addMonths,
+} from './dayLogic';
 
 type ViewMode = 'day' | 'week' | 'month';
 

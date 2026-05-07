@@ -43,5 +43,5 @@ export const timetrackApi = {
     const qs = params.toString() ? `?${params.toString()}` : '';
     return client.get<StatItem[]>(`/timetrack/stats${qs}`).then(res => res.data);
   },
-  getTodayStats: () => client.get<{tag_id: string, duration_ms: number}[]>('/timetrack/stats/today').then(res => res.data),
+  getTodayStats: (since: string) => client.get<{tag_id: string, duration_ms: number}[]>(`/timetrack/stats/today?since=${encodeURIComponent(since)}`).then(res => res.data),
 };
