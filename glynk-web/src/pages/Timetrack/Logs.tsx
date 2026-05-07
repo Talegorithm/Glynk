@@ -3,10 +3,25 @@ import type { StatItem } from '../../api/timetrack';
 import { timetrackApi } from '../../api/timetrack';
 import { useTimetrackStore } from '../../store/timetrack';
 
-const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-const endOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+const getLogicalDate = (d: Date) => {
+  const logical = new Date(d);
+  if (logical.getHours() < 4) {
+    logical.setDate(logical.getDate() - 1);
+  }
+  return logical;
+};
 
-const addDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const startOfDay = (d: Date) => {
+  const logical = getLogicalDate(d);
+  return new Date(logical.getFullYear(), logical.getMonth(), logical.getDate(), 4, 0, 0, 0);
+};
+
+const endOfDay = (d: Date) => {
+  const logical = getLogicalDate(d);
+  return new Date(logical.getFullYear(), logical.getMonth(), logical.getDate() + 1, 3, 59, 59, 999);
+};
+
+const addDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n, d.getHours(), d.getMinutes());
 
 function formatDuration(ms: number) {
   const totalMinutes = Math.floor(ms / 1000 / 60);
@@ -55,6 +70,17 @@ export default function TimetrackLogs() {
 
   const handlePrev = () => setRefDate(addDays(refDate, -1));
   const handleNext = () => setRefDate(addDays(refDate, 1));
+
+  const handleDelete = async (sessionId: string) => {
+    if (!confirm('Are you sure you want to delete this record?')) return;
+    try {
+      await timetrackApi.deleteSession(sessionId);
+      setStats(prev => prev.filter(s => s.id !== sessionId));
+    } catch (e) {
+      console.error(e);
+      alert('Failed to delete session');
+    }
+  };
 
   const filteredStats = useMemo(() => {
     let filtered = stats.filter(s => s.end_time); // Only completed sessions
@@ -142,6 +168,13 @@ export default function TimetrackLogs() {
                     <span className="text-sm font-mono font-medium text-gray-900 dark:text-gray-100 bg-gray-100 dark:bg-gray-700/50 px-2 py-0.5 rounded-md">
                       {formatDuration(durationMs)}
                     </span>
+                    <button 
+                      onClick={() => handleDelete(session.id)}
+                      className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors"
+                      title="Delete record"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
                   </div>
                 </div>
                 

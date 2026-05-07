@@ -33,6 +33,7 @@ export const timetrackApi = {
   startSession: (tagId: string, singleMode: boolean) => client.post<Session>(`/timetrack/sessions/${tagId}/start?single_mode=${singleMode}`).then(res => res.data),
   stopSession: (sessionId: string, end_time?: string) => client.post<Session>(`/timetrack/sessions/${sessionId}/stop`, { end_time }).then(res => res.data),
   updateSessionNote: (sessionId: string, note: string) => client.put<Session>(`/timetrack/sessions/${sessionId}/note`, { note }).then(res => res.data),
+  deleteSession: (sessionId: string) => client.delete(`/timetrack/sessions/${sessionId}`).then(res => res.data),
   addPastSession: (tagId: string, durationMins: number, note: string) => client.post<Session>('/timetrack/sessions/past', { tag_id: tagId, duration_mins: durationMins, note }).then(res => res.data),
   
   getStats: (startDt?: string, endDt?: string) => {

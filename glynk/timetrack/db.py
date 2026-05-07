@@ -159,6 +159,13 @@ class TimetrackStore:
         )
         return self.get_session(session_id)
 
+    def delete_session(self, session_id: str, entity_id: str) -> bool:
+        result = self.db._execute(
+            "DELETE FROM tt_sessions WHERE id = %s AND entity_id = %s RETURNING id",
+            (session_id, entity_id)
+        )
+        return bool(result)
+
     def get_active_sessions(self, entity_id: str) -> List[dict]:
         return self.db._execute(
             "SELECT * FROM tt_sessions WHERE entity_id = %s AND end_time IS NULL",
@@ -188,7 +195,7 @@ class TimetrackStore:
                FROM tt_sessions 
                WHERE entity_id = %s 
                  AND end_time IS NOT NULL 
-                 AND start_time >= CURRENT_DATE
+                 AND start_time >= (CURRENT_TIMESTAMP - INTERVAL '4 hours')::date + INTERVAL '4 hours'
                GROUP BY tag_id""",
             (entity_id,), fetch='all'
         ) or []

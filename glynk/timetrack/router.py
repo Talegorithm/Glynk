@@ -75,6 +75,13 @@ class PastSessionRequest(BaseModel):
 async def add_past_session(req: PastSessionRequest, user: dict = Depends(get_current_user), store: TimetrackStore = Depends(get_store)):
     return store.add_past_session(user['entity_id'], req.tag_id, req.duration_mins, req.note)
 
+@router.delete("/timetrack/sessions/{session_id}")
+async def delete_session(session_id: str, user: dict = Depends(get_current_user), store: TimetrackStore = Depends(get_store)):
+    deleted = store.delete_session(session_id, user['entity_id'])
+    if not deleted:
+        raise HTTPException(404, "Session not found")
+    return {"status": "success"}
+
 @router.get("/timetrack/stats")
 async def get_stats(
     start_dt: str = Query(None), 
