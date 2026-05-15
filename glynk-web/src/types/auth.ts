@@ -14,6 +14,7 @@ export interface RegisterResponse {
 
 export interface LoginResponse {
   entity_id: string;
+  token: string;
   display_name?: string;
   email?: string;
 }

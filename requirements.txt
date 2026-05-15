@@ -12,6 +12,8 @@ feedparser
 apscheduler
 python-multipart
 python-dotenv
+tencentcloud-sdk-python-common
+tencentcloud-sdk-python-ses
 trafilatura
 markdown
 dashscope

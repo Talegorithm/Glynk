@@ -1,34 +1,43 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { loginByToken } from '../api/auth';
+import { loginByToken, loginWithPassword } from '../api/auth';
 import { useAuthStore } from '../store/auth';
 import { useT } from '../i18n';
+
+type LoginMode = 'password' | 'token';
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const setAuth = useAuthStore((s) => s.setAuth);
   const t = useT();
 
+  const [mode, setMode] = useState<LoginMode>('password');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [tokenInput, setTokenInput] = useState('');
   const [loading, setLoading] = useState(false);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    const raw = tokenInput.trim();
-    if (!raw) return;
     setLoading(true);
     try {
-      const user = await loginByToken(raw);
-      setAuth({ uid: user.entity_id, token: raw });
+      const user = mode === 'password'
+        ? await loginWithPassword({ email: email.trim().toLowerCase(), password })
+        : await loginByToken(tokenInput.trim());
+      setAuth({ uid: user.entity_id, token: user.token });
       toast.success(t('login.success', { uid: user.entity_id }));
       navigate('/library');
-    } catch {
-      toast.error(t('login.error'));
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || t(mode === 'password' ? 'login.error' : 'login.token_error'));
     } finally {
       setLoading(false);
     }
   }
+
+  const canSubmit = mode === 'password'
+    ? Boolean(email.trim() && password)
+    : Boolean(tokenInput.trim());
 
   return (
     <div className="w-full h-full flex flex-col items-center justify-center p-6 flex-1 min-h-[70vh]">
@@ -41,22 +50,83 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={handleLogin} className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              API Token
-            </label>
-            <textarea
-              value={tokenInput}
-              onChange={(e) => setTokenInput(e.target.value)}
-              placeholder={t('login.placeholder')}
-              rows={3}
-              required
-              className="glynk-input font-mono resize-none"
-            />
+          <div className="grid grid-cols-2 gap-1 rounded-xl bg-gray-100/80 dark:bg-gray-800/80 p-1">
+            <button
+              type="button"
+              onClick={() => setMode('password')}
+              className={`h-10 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                mode === 'password'
+                  ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+              }`}
+            >
+              {t('login.password_tab')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('token')}
+              className={`h-10 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                mode === 'token'
+                  ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+              }`}
+            >
+              {t('login.token_tab')}
+            </button>
           </div>
+
+          {mode === 'password' ? (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  {t('login.email')}
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  required
+                  className="glynk-input"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  {t('login.password')}
+                </label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={t('login.password_placeholder')}
+                  required
+                  className="glynk-input"
+                />
+              </div>
+            </>
+          ) : (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                {t('login.token_label')}
+              </label>
+              <textarea
+                value={tokenInput}
+                onChange={(e) => setTokenInput(e.target.value)}
+                placeholder={t('login.token_placeholder')}
+                rows={3}
+                required
+                className="glynk-input font-mono resize-none"
+              />
+              <p className="mt-2 text-xs text-gray-400 dark:text-gray-500 font-medium">
+                {t('login.token_hint')}
+              </p>
+            </div>
+          )}
+
           <button
             type="submit"
-            disabled={loading || !tokenInput.trim()}
+            disabled={loading || !canSubmit}
             className="glynk-button-primary"
           >
             {loading ? (

@@ -76,8 +76,27 @@ CREATE TABLE IF NOT EXISTS auth (
     entity_id   TEXT PRIMARY KEY REFERENCES entities(id),
     token       TEXT UNIQUE NOT NULL,
     email       TEXT UNIQUE NOT NULL,
+    password_hash TEXT,
+    email_verified_at TIMESTAMPTZ,
     created_at  TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE auth ADD COLUMN IF NOT EXISTS password_hash TEXT;
+ALTER TABLE auth ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ;
+
+CREATE TABLE IF NOT EXISTS auth_email_codes (
+    id          TEXT PRIMARY KEY,
+    email       TEXT NOT NULL,
+    purpose     TEXT NOT NULL DEFAULT 'register',
+    code_hash   TEXT NOT NULL,
+    expires_at  TIMESTAMPTZ NOT NULL,
+    consumed_at TIMESTAMPTZ,
+    attempts    INT NOT NULL DEFAULT 0,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_email_codes_email
+    ON auth_email_codes(email, purpose, created_at DESC);
 
 -- User state
 CREATE TABLE IF NOT EXISTS reading_progress (
@@ -229,10 +248,14 @@ class PostgresStore:
 
     # --- Auth ---
 
-    def create_auth(self, entity_id: str, token: str, email: str) -> bool:
+    def create_auth(self, entity_id: str, token: str, email: str,
+                    password_hash: str = None, email_verified: bool = False) -> bool:
         self._execute(
-            "INSERT INTO auth (entity_id, token, email) VALUES (%s, %s, %s)",
-            (entity_id, token, email),
+            """
+            INSERT INTO auth (entity_id, token, email, password_hash, email_verified_at)
+            VALUES (%s, %s, %s, %s, CASE WHEN %s THEN NOW() ELSE NULL END)
+            """,
+            (entity_id, token, email, password_hash, email_verified),
         )
         return True
 
@@ -246,9 +269,9 @@ class PostgresStore:
 
     def get_auth_by_email(self, email: str) -> Optional[dict]:
         return self._execute(
-            """SELECT a.*, e.display_name
+            """SELECT a.*, e.display_name, e.kind, e.state
                FROM auth a JOIN entities e ON a.entity_id = e.id
-               WHERE a.email = %s""",
+               WHERE LOWER(a.email) = %s""",
             (email,), fetch='one',
         )
 
@@ -259,6 +282,61 @@ class PostgresStore:
                WHERE a.entity_id = %s""",
             (entity_id,), fetch='one',
         )
+
+    def create_email_code(self, code_id: str, email: str, purpose: str,
+                          code_hash: str, ttl_minutes: int = 10) -> bool:
+        self._execute(
+            """
+            INSERT INTO auth_email_codes (id, email, purpose, code_hash, expires_at)
+            VALUES (%s, %s, %s, %s, NOW() + make_interval(mins => %s))
+            """,
+            (code_id, email, purpose, code_hash, ttl_minutes),
+        )
+        return True
+
+    def get_recent_email_code(self, email: str, purpose: str,
+                              within_seconds: int = 60) -> Optional[dict]:
+        return self._execute(
+            """
+            SELECT *
+            FROM auth_email_codes
+            WHERE email = %s
+              AND purpose = %s
+              AND created_at > NOW() - make_interval(secs => %s)
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (email, purpose, within_seconds), fetch='one',
+        )
+
+    def get_latest_email_code(self, email: str, purpose: str) -> Optional[dict]:
+        return self._execute(
+            """
+            SELECT *
+            FROM auth_email_codes
+            WHERE email = %s
+              AND purpose = %s
+              AND consumed_at IS NULL
+              AND expires_at > NOW()
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (email, purpose), fetch='one',
+        )
+
+    def increment_email_code_attempts(self, code_id: str) -> bool:
+        self._execute(
+            "UPDATE auth_email_codes SET attempts = attempts + 1 WHERE id = %s",
+            (code_id,),
+        )
+        return True
+
+    def consume_email_code(self, code_id: str) -> bool:
+        self._execute(
+            "UPDATE auth_email_codes SET consumed_at = NOW() WHERE id = %s",
+            (code_id,),
+        )
+        return True
 
     # --- Units ---
 
